@@ -9,101 +9,52 @@ export default function Documentos() {
     const [error, setError] = useState('');
 
     const documentTypes = [
-        { id: 'Contrato', label: 'Contrato', icon: '📋', description: 'Contrato de matrícula do aluno' },
-        { id: 'Estagio', label: 'Documento de Estágio', icon: '🏥', description: 'Termo de estágio supervisionado' },
-        { id: 'Conclusao', label: 'Declaração de Conclusão', icon: '🎓', description: 'Declaração de conclusão de curso' },
-        { id: 'Certificado', label: 'Certificado', icon: '🏆', description: 'Certificado de conclusão' },
-        { id: 'LiberacaoEstagio', label: 'Liberação de Estágio', icon: '✅', description: 'Autorização para início de estágio' },
+        { id: 'Contrato', label: 'Contrato', description: 'Contrato de matrícula do aluno' },
+        { id: 'Estagio', label: 'Documento de Estágio', description: 'Termo de estágio supervisionado' },
+        { id: 'Conclusao', label: 'Declaração de Conclusão', description: 'Declaração de conclusão de curso' },
+        { id: 'Certificado', label: 'Certificado', description: 'Certificado de conclusão' },
+        { id: 'LiberacaoEstagio', label: 'Liberação de Estágio', description: 'Autorização para início de estágio' },
     ];
 
-    const handleBusca = async () => {
-        if (!busca.trim()) return;
-        try {
-            try {
-                const res = await pessoaService.getByIdFuncional(busca.trim());
-                if (res.data) { setResultados([res.data]); return; }
-            } catch { /* fallback */ }
-            const res = await pessoaService.getAll(0);
-            const filtered = (res.data || []).filter(p =>
-                p.nomeCompleto?.toLowerCase().includes(busca.toLowerCase()) || p.idFuncional?.toLowerCase().includes(busca.toLowerCase())
-            );
-            setResultados(filtered);
-        } catch { setResultados([]); }
-    };
+    const handleBusca = async () => { if (!busca.trim()) return; try { try { const res = await pessoaService.getByIdFuncional(busca.trim()); if (res.data) { setResultados([res.data]); return; } } catch { } const res = await pessoaService.getAll(0); setResultados((res.data || []).filter(p => p.nomeCompleto?.toLowerCase().includes(busca.toLowerCase()) || p.idFuncional?.toLowerCase().includes(busca.toLowerCase()))); } catch { setResultados([]); } };
 
-    const handleEmitir = async (tipoDocumento) => {
-        if (!alunoSelecionado) { setError('Selecione um aluno primeiro.'); return; }
-        setEmitindo(tipoDocumento); setError('');
-        try {
-            const res = await documentoService.emitir({ alunoId: alunoSelecionado.id, tipoDocumento });
-            const blob = new Blob([res.data], { type: res.headers['content-type'] || 'application/octet-stream' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `${tipoDocumento}_${alunoSelecionado.idFuncional}.docx`;
-            a.click();
-            window.URL.revokeObjectURL(url);
-        } catch (err) {
-            if (err.response?.status === 403) {
-                setError('⚠️ Aluno possui pendências financeiras. Regularize antes de emitir documentos.');
-            } else {
-                setError(err.response?.data?.message || 'Erro ao emitir documento.');
-            }
-        } finally { setEmitindo(''); }
-    };
-
-    const inputClass = "flex-1 px-4 py-3 rounded-sm border border-slate-200 text-sm outline-none focus:border-teal-500 bg-white placeholder-slate-400";
+    const handleEmitir = async (tipoDocumento) => { if (!alunoSelecionado) { setError('Selecione um aluno primeiro.'); return; } setEmitindo(tipoDocumento); setError(''); try { const res = await documentoService.emitir({ alunoId: alunoSelecionado.id, tipoDocumento }); const blob = new Blob([res.data], { type: res.headers['content-type'] || 'application/octet-stream' }); const url = window.URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `${tipoDocumento}_${alunoSelecionado.idFuncional}.docx`; a.click(); window.URL.revokeObjectURL(url); } catch (err) { setError(err.response?.status === 403 ? 'Aluno possui pendências financeiras.' : (err.response?.data?.message || 'Erro ao emitir.')); } finally { setEmitindo(''); } };
 
     return (
-        <div className="space-y-8">
-            <div>
-                <h2 className="text-2xl font-bold text-slate-800">Documentos</h2>
-                <p className="text-slate-400 text-sm mt-1">Gere documentos com base nos templates cadastrados</p>
-            </div>
+        <div>
+            <h2 className="page-title">Documentos</h2>
 
-            {/* Seleção de Aluno */}
-            <div className="bg-white rounded-md border border-slate-200 p-6 space-y-4">
-                <label className="block text-sm font-medium text-slate-600">Selecionar Aluno (ID ou Nome)</label>
-                <div className="flex gap-3">
-                    <input type="text" placeholder="Buscar aluno por ID funcional ou nome..." value={busca} onChange={(e) => setBusca(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleBusca()}
-                        className={inputClass} />
-                    <button onClick={handleBusca} className="px-5 py-2.5 bg-teal-600 text-white rounded-md text-sm font-medium hover:bg-teal-700 transition-colors cursor-pointer">Buscar</button>
+            <div className="card card-padded" style={{ marginBottom: '24px' }}>
+                <label className="form-label">Selecionar Aluno</label>
+                <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+                    <input type="text" placeholder="Buscar por ID funcional ou nome..." value={busca} onChange={(e) => setBusca(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleBusca()} className="search-input" style={{ flex: 1, paddingLeft: '16px' }} />
+                    <button onClick={handleBusca} className="btn-primary">Buscar</button>
                 </div>
-
                 {resultados.length > 0 && (
-                    <div className="space-y-1 max-h-40 overflow-y-auto">
-                        {resultados.map(p => (
-                            <button key={p.id} onClick={() => { setAlunoSelecionado(p); setResultados([]); setBusca(`${p.idFuncional} — ${p.nomeCompleto}`); }}
-                                className={`w-full text-left px-4 py-2.5 rounded-sm text-sm hover:bg-teal-50 transition-colors cursor-pointer ${alunoSelecionado?.id === p.id ? 'bg-teal-50 border border-teal-200' : 'border border-slate-100'}`}>
-                                <span className="font-mono text-teal-600">{p.idFuncional}</span> — <span className="text-slate-700">{p.nomeCompleto}</span>
-                            </button>
-                        ))}
-                    </div>
+                    <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '200px', overflowY: 'auto' }}>{resultados.map(p => (
+                        <button key={p.id} onClick={() => { setAlunoSelecionado(p); setResultados([]); setBusca(`${p.idFuncional} — ${p.nomeCompleto}`); }}
+                            style={{ width: '100%', textAlign: 'left', padding: '12px 16px', borderRadius: '10px', fontSize: '14px', cursor: 'pointer', border: alunoSelecionado?.id === p.id ? '1.5px solid #2563eb' : '1px solid #f3f4f6', background: alunoSelecionado?.id === p.id ? '#eff6ff' : 'white' }}>
+                            <span style={{ fontFamily: 'monospace', fontWeight: 600, color: '#2563eb', marginRight: '8px' }}>{p.idFuncional}</span><span style={{ color: '#111827' }}>{p.nomeCompleto}</span>
+                        </button>))}</div>
                 )}
-
                 {alunoSelecionado && (
-                    <div className="bg-teal-50 rounded-sm p-3 flex items-center justify-between">
-                        <span className="text-sm text-teal-800">
-                            <strong>Selecionado:</strong> {alunoSelecionado.idFuncional} — {alunoSelecionado.nomeCompleto}
-                        </span>
-                        <button onClick={() => { setAlunoSelecionado(null); setBusca(''); }}
-                            className="text-teal-600 hover:text-teal-800 text-sm cursor-pointer">✕ Limpar</button>
+                    <div style={{ marginTop: '12px', background: '#eff6ff', borderRadius: '10px', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: '1px solid #dbeafe' }}>
+                        <span style={{ fontSize: '14px', color: '#1e3a5f' }}>Selecionado: <span style={{ fontFamily: 'monospace', fontWeight: 600, color: '#2563eb', margin: '0 4px' }}>{alunoSelecionado.idFuncional}</span> {alunoSelecionado.nomeCompleto}</span>
+                        <button onClick={() => { setAlunoSelecionado(null); setBusca(''); }} style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', fontSize: '14px', fontWeight: 500 }}>✕</button>
                     </div>
                 )}
             </div>
 
-            {error && <div className="bg-red-50 text-red-600 text-sm rounded-sm p-3 border border-red-200">{error}</div>}
+            {error && <div className="alert-error" style={{ marginBottom: '24px' }}>{error}</div>}
 
-            {/* Grid de Documentos */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '20px' }}>
                 {documentTypes.map((doc) => (
-                    <div key={doc.id} className="bg-white rounded-md border border-slate-200 p-6 hover:shadow-sm transition-shadow group">
-                        <div className="text-2xl mb-3">{doc.icon}</div>
-                        <h3 className="text-base font-bold text-slate-800">{doc.label}</h3>
-                        <p className="text-slate-400 text-sm mt-1 mb-5">{doc.description}</p>
+                    <div key={doc.id} className="card card-padded" style={{ display: 'flex', flexDirection: 'column' }}>
+                        <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#111827' }}>{doc.label}</h3>
+                        <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '6px', marginBottom: '20px', flex: 1 }}>{doc.description}</p>
                         <button onClick={() => handleEmitir(doc.id)} disabled={!alunoSelecionado || emitindo === doc.id}
-                            className="w-full py-2.5 bg-teal-600 text-white rounded-md text-sm font-medium hover:bg-teal-700 transition-colors cursor-pointer opacity-90 group-hover:opacity-100 disabled:opacity-50">
+                            className={alunoSelecionado ? 'btn-blue' : 'btn-cancel'}
+                            style={{ width: '100%', opacity: !alunoSelecionado ? 0.5 : 1, cursor: !alunoSelecionado ? 'not-allowed' : 'pointer' }}>
                             {emitindo === doc.id ? 'Gerando...' : 'Emitir PDF'}
                         </button>
                     </div>

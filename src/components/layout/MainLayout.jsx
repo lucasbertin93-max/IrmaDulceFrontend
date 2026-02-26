@@ -4,12 +4,14 @@ import Header from './Header';
 
 export default function MainLayout() {
     return (
-        <div className="flex min-h-screen bg-slate-50">
+        <div style={{ display: 'flex', minHeight: '100vh' }}>
             <Sidebar />
-            <div className="flex-1 flex flex-col" style={{ marginLeft: 'var(--sidebar-width)' }}>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
                 <Header />
-                <main className="flex-1 p-6 overflow-auto" style={{ marginTop: 'var(--header-height)' }}>
-                    <Outlet />
+                <main className="main-content">
+                    <div className="content-wrapper">
+                        <Outlet />
+                    </div>
                 </main>
             </div>
         </div>

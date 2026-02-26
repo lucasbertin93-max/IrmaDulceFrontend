@@ -25,6 +25,7 @@ export const cursoService = {
     deletar: (id) => api.delete(`/cursos/${id}`),
     vincularDisciplina: (cursoId, disciplinaId, semestre) => api.post(`/cursos/${cursoId}/disciplinas/${disciplinaId}`, null, { params: semestre ? { semestre } : {} }),
     desvincularDisciplina: (cursoId, disciplinaId) => api.delete(`/cursos/${cursoId}/disciplinas/${disciplinaId}`),
+    getDisciplinas: (cursoId) => api.get(`/cursos/${cursoId}/disciplinas`),
 };
 
 // ==================== DISCIPLINAS ====================
@@ -45,6 +46,9 @@ export const turmaService = {
     atualizar: (id, data) => api.put(`/turmas/${id}`, data),
     matricular: (turmaId, data) => api.post(`/turmas/${turmaId}/matriculas`, data),
     getMatriculas: (turmaId) => api.get(`/turmas/${turmaId}/matriculas`),
+    cancelarMatricula: (turmaId, alunoId) => api.delete(`/turmas/${turmaId}/matriculas/${alunoId}`),
+    getDisciplinas: (turmaId) => api.get(`/turmas/${turmaId}/disciplinas`),
+    atribuirDocente: (turmaId, disciplinaId, docenteId) => api.put(`/turmas/${turmaId}/disciplinas/${disciplinaId}/docente`, { docenteId }),
 };
 
 // ==================== DIÁRIO DE CLASSE ====================
@@ -56,6 +60,8 @@ export const diarioService = {
     getMedia: (alunoId, turmaId, disciplinaId) => api.get(`/diarioclasse/media/${alunoId}`, { params: { turmaId, disciplinaId } }),
     getFrequencia: (alunoId, turmaId, disciplinaId) => api.get(`/diarioclasse/frequencia/${alunoId}`, { params: { turmaId, disciplinaId } }),
     verificarAprovacao: (alunoId, turmaId, disciplinaId) => api.get(`/diarioclasse/aprovado/${alunoId}`, { params: { turmaId, disciplinaId } }),
+    getHistorico: (turmaId, disciplinaId) => api.get('/diarioclasse/historico', { params: { turmaId, disciplinaId } }),
+    getNotasGrid: (turmaId, disciplinaId) => api.get('/diarioclasse/notas-grid', { params: { turmaId, disciplinaId } }),
 };
 
 // ==================== AVALIAÇÕES ====================

@@ -10,14 +10,16 @@ export default function Cadastro() {
     const [showModal, setShowModal] = useState(false);
     const [editingId, setEditingId] = useState(null);
     const [form, setForm] = useState({
-        nomeCompleto: '', cpf: '', rg: '', dataNascimento: '', perfil: 0,
+        nomeCompleto: '', cpf: '', rg: '', dataNascimento: '', perfil: 4,
+        estadoCivil: 1, naturalidade: '', nacionalidade: 'Brasileira',
         logradouro: '', numero: '', cep: '', bairro: '', cidade: '',
+        pontoReferencia: '', nomePai: '', nomeMae: '',
         nomeResponsavel: '', cpfResponsavel: '', telefoneResponsavel: '',
     });
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
 
-    const perfis = ['Aluno', 'Docente', 'Administrativo', 'Master'];
+    const estadosCivis = ['Solteiro(a)', 'Casado(a)', 'Divorciado(a)', 'Viúvo(a)', 'União Estável'];
 
     useEffect(() => { loadPessoas(); }, [perfilFiltro]);
 
@@ -32,7 +34,13 @@ export default function Cadastro() {
 
     const openNew = () => {
         setEditingId(null);
-        setForm({ nomeCompleto: '', cpf: '', rg: '', dataNascimento: '', perfil: 0, logradouro: '', numero: '', cep: '', bairro: '', cidade: '', nomeResponsavel: '', cpfResponsavel: '', telefoneResponsavel: '' });
+        setForm({
+            nomeCompleto: '', cpf: '', rg: '', dataNascimento: '', perfil: 4,
+            estadoCivil: 1, naturalidade: '', nacionalidade: 'Brasileira',
+            logradouro: '', numero: '', cep: '', bairro: '', cidade: '',
+            pontoReferencia: '', nomePai: '', nomeMae: '',
+            nomeResponsavel: '', cpfResponsavel: '', telefoneResponsavel: '',
+        });
         setError('');
         setShowModal(true);
     };
@@ -40,8 +48,11 @@ export default function Cadastro() {
     const openEdit = (p) => {
         setEditingId(p.id);
         setForm({
-            nomeCompleto: p.nomeCompleto || '', cpf: p.cpf || '', rg: p.rg || '', dataNascimento: p.dataNascimento?.substring(0, 10) || '', perfil: p.perfil ?? 0,
+            nomeCompleto: p.nomeCompleto || '', cpf: p.cpf || '', rg: p.rg || '',
+            dataNascimento: p.dataNascimento?.substring(0, 10) || '', perfil: p.perfil ?? 4,
+            estadoCivil: p.estadoCivil ?? 1, naturalidade: p.naturalidade || '', nacionalidade: p.nacionalidade || 'Brasileira',
             logradouro: p.logradouro || '', numero: p.numero || '', cep: p.cep || '', bairro: p.bairro || '', cidade: p.cidade || '',
+            pontoReferencia: p.pontoReferencia || '', nomePai: p.nomePai || '', nomeMae: p.nomeMae || '',
             nomeResponsavel: '', cpfResponsavel: '', telefoneResponsavel: '',
         });
         setError('');
@@ -52,24 +63,50 @@ export default function Cadastro() {
         setSaving(true);
         setError('');
         try {
-            if (editingId) {
-                await pessoaService.atualizar(editingId, form);
-            } else {
-                await pessoaService.criar(form);
-            }
+            // Build payload matching backend PessoaCreateRequest DTO exactly
+            const payload = {
+                nomeCompleto: form.nomeCompleto,
+                rg: form.rg,
+                cpf: form.cpf,
+                estadoCivil: parseInt(form.estadoCivil) || 1,
+                dataNascimento: form.dataNascimento,
+                naturalidade: form.naturalidade,
+                nacionalidade: form.nacionalidade || 'Brasileira',
+                logradouro: form.logradouro,
+                numero: form.numero,
+                cep: form.cep,
+                bairro: form.bairro,
+                cidade: form.cidade,
+                pontoReferencia: form.pontoReferencia || null,
+                nomePai: form.nomePai,
+                nomeMae: form.nomeMae,
+                perfil: parseInt(form.perfil) || 4,
+                responsavelFinanceiroId: null,
+                responsavelFinanceiro: null,
+            };
+
+            if (editingId) { await pessoaService.atualizar(editingId, payload); }
+            else { await pessoaService.criar(payload); }
             setShowModal(false);
             loadPessoas();
         } catch (err) {
-            setError(err.response?.data?.message || 'Erro ao salvar.');
+            const data = err.response?.data;
+            if (data?.errors) {
+                const msgs = Object.values(data.errors).flat().join('; ');
+                setError(msgs);
+            } else if (typeof data === 'string') {
+                setError(data);
+            } else {
+                setError(data?.message || data?.title || 'Erro ao salvar.');
+            }
         } finally { setSaving(false); }
     };
 
+
     const handleDelete = async (id) => {
         if (!confirm('Confirma desativação?')) return;
-        try {
-            await pessoaService.desativar(id);
-            loadPessoas();
-        } catch { alert('Erro ao desativar.'); }
+        try { await pessoaService.desativar(id); loadPessoas(); }
+        catch { alert('Erro ao desativar.'); }
     };
 
     const filtered = pessoas.filter(p =>
@@ -77,172 +114,124 @@ export default function Cadastro() {
         p.cpf?.includes(filtro) || p.idFuncional?.toLowerCase().includes(filtro.toLowerCase())
     );
 
-    const inputClass = "w-full px-4 py-3 rounded-sm border border-slate-200 text-sm outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 bg-slate-50/50 placeholder-slate-400";
-    const selectClass = "w-full px-4 py-3 rounded-sm border border-slate-200 text-sm outline-none bg-slate-50/50";
-
     return (
-        <div className="space-y-8">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h2 className="text-2xl font-bold text-slate-800">Cadastro</h2>
-                    <p className="text-slate-400 text-sm mt-1">Base de alunos, docentes e funcionários.</p>
-                </div>
-                <button onClick={openNew} className="px-5 py-2.5 bg-teal-600 text-white rounded-md text-sm font-medium hover:bg-teal-700 transition-colors cursor-pointer">
-                    + Novo Cadastro
-                </button>
-            </div>
+        <div>
+            <h2 className="page-title">Cadastro</h2>
 
-            {/* Filtros */}
-            <div className="flex gap-4 items-center">
-                <div className="relative flex-1 max-w-sm">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">🔍</span>
-                    <input type="text" placeholder="Buscar por nome, CPF..." value={filtro} onChange={(e) => setFiltro(e.target.value)}
-                        className="w-full pl-8 pr-4 py-2.5 rounded-sm border border-slate-200 text-sm outline-none focus:border-teal-500 bg-white placeholder-slate-400" />
+            <div className="card">
+                <div className="search-bar-container">
+                    <div className="search-input-wrapper">
+                        <span className="search-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                        </span>
+                        <input type="text" placeholder="Pesquisar usuários..." value={filtro} onChange={(e) => setFiltro(e.target.value)} className="search-input" />
+                    </div>
+                    <button onClick={openNew} className="btn-primary">Novo Usuário</button>
                 </div>
-                <select value={perfilFiltro} onChange={(e) => setPerfilFiltro(e.target.value)} className="px-4 py-2.5 rounded-sm border border-slate-200 text-sm outline-none bg-white">
-                    <option value="">Todos os perfis</option>
-                    <option value="0">Alunos</option>
-                    <option value="1">Docentes</option>
-                    <option value="2">Administrativos</option>
-                </select>
-            </div>
 
-            {/* Lista */}
-            <div className="space-y-3">
                 {loading ? (
-                    <div className="bg-white rounded-md border border-slate-200 p-12 text-center text-slate-400 text-sm">Carregando...</div>
+                    <div className="empty-state">Carregando...</div>
                 ) : filtered.length === 0 ? (
-                    <div className="bg-white rounded-md border border-slate-200 p-12 text-center text-slate-400 text-sm">Nenhum registro encontrado.</div>
-                ) : filtered.map((p) => (
-                    <div key={p.id} className="bg-white rounded-md border border-slate-200 px-6 py-4 flex items-center justify-between hover:shadow-sm transition-shadow">
-                        <div className="flex items-center gap-6 flex-1 min-w-0">
-                            <div className="flex items-center gap-3 min-w-0">
-                                <span className="text-lg">👤</span>
-                                <div className="min-w-0">
-                                    <p className="font-semibold text-slate-800 truncate">{p.nomeCompleto}</p>
-                                    <p className="text-slate-400 text-sm">CPF: {p.cpf}</p>
-                                </div>
-                            </div>
-                            <div className="hidden md:block text-sm text-slate-500">
-                                <span className="font-mono text-teal-600">{p.idFuncional}</span>
-                            </div>
-                            <div className="hidden lg:block">
-                                <span className={`text-xs font-medium px-2 py-1 rounded-full ${p.ativo ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
-                                    {p.ativo ? 'Ativo' : 'Inativo'}
-                                </span>
-                            </div>
-                            <div className="hidden lg:block text-sm text-slate-500">
-                                {perfis[p.perfil] || p.perfil}
-                            </div>
+                    <div className="empty-state">Nenhum registro encontrado.</div>
+                ) : (
+                    <table className="data-table">
+                        <thead>
+                            <tr>
+                                <th>Nome</th>
+                                <th>CPF</th>
+                                <th>Status</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {filtered.map((p) => (
+                                <tr key={p.id} onDoubleClick={() => openEdit(p)} style={{ cursor: 'pointer' }}>
+                                    <td>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                            <div className="avatar-sm">{p.nomeCompleto?.charAt(0) || 'U'}</div>
+                                            <div>
+                                                <div style={{ fontWeight: 500, color: '#111827' }}>{p.nomeCompleto}</div>
+                                                <div style={{ fontSize: '12px', color: '#9ca3af', fontFamily: 'monospace', marginTop: '2px' }}>{p.idFuncional}</div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>{p.cpf}</td>
+                                    <td>
+                                        <span className={`badge ${p.ativo ? 'badge-active' : 'badge-inactive'}`}>
+                                            {p.ativo ? 'ATIVO' : 'INATIVO'}
+                                        </span>
+                                    </td>
+                                    <td style={{ textAlign: 'right' }}>
+                                        <div className="row-actions">
+                                            <button onClick={() => openEdit(p)} className="row-action-btn">Editar</button>
+                                            <button onClick={() => handleDelete(p.id)} className="row-action-btn danger">Desativar</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                )}
+            </div>
+
+            <Modal open={showModal} onClose={() => setShowModal(false)} title={editingId ? 'Editar Cadastro' : 'Novo Cadastro'} maxWidth="700px"
+                footer={<>
+                    <button onClick={() => setShowModal(false)} className="btn-cancel">Cancelar</button>
+                    <button onClick={handleSave} disabled={saving} className="btn-blue">{saving ? 'Salvando...' : 'Salvar Registro'}</button>
+                </>}
+            >
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    {error && <div className="alert-error">{error}</div>}
+
+                    {/* Dados Pessoais */}
+                    <h4 style={{ fontSize: '14px', fontWeight: 600, color: '#111827', marginBottom: '-12px' }}>Dados Pessoais</h4>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                        <div style={{ gridColumn: 'span 2' }}>
+                            <label className="form-label">Nome Completo *</label>
+                            <input type="text" value={form.nomeCompleto} onChange={(e) => setForm({ ...form, nomeCompleto: e.target.value })} className="form-input" placeholder="Ex: Maria da Silva" />
                         </div>
-                        <div className="flex items-center gap-1 ml-4">
-                            <button onClick={() => openEdit(p)} className="text-slate-400 hover:text-teal-600 cursor-pointer p-2 hover:bg-slate-50 rounded-md transition-colors text-sm">Editar</button>
-                            <button onClick={() => handleDelete(p.id)} className="text-slate-400 hover:text-red-600 cursor-pointer p-2 hover:bg-slate-50 rounded-md transition-colors text-sm">Desativar</button>
+                        <div><label className="form-label">CPF *</label><input type="text" value={form.cpf} onChange={(e) => setForm({ ...form, cpf: e.target.value })} className="form-input" placeholder="000.000.000-00" /></div>
+                        <div><label className="form-label">RG *</label><input type="text" value={form.rg} onChange={(e) => setForm({ ...form, rg: e.target.value })} className="form-input" /></div>
+                        <div><label className="form-label">Data de Nascimento *</label><input type="date" value={form.dataNascimento} onChange={(e) => setForm({ ...form, dataNascimento: e.target.value })} className="form-input" /></div>
+                        <div><label className="form-label">Estado Civil *</label><select value={form.estadoCivil} onChange={(e) => setForm({ ...form, estadoCivil: parseInt(e.target.value) })} className="form-select"><option value={1}>Solteiro(a)</option><option value={2}>Casado(a)</option><option value={3}>Divorciado(a)</option><option value={4}>Viúvo(a)</option><option value={5}>Outro</option></select></div>
+                        <div><label className="form-label">Naturalidade *</label><input type="text" value={form.naturalidade} onChange={(e) => setForm({ ...form, naturalidade: e.target.value })} className="form-input" placeholder="Ex: São Paulo - SP" /></div>
+                        <div><label className="form-label">Nacionalidade *</label><input type="text" value={form.nacionalidade} onChange={(e) => setForm({ ...form, nacionalidade: e.target.value })} className="form-input" placeholder="Ex: Brasileira" /></div>
+                        <div><label className="form-label">Perfil *</label><select value={form.perfil} onChange={(e) => setForm({ ...form, perfil: parseInt(e.target.value) })} className="form-select" disabled={!!editingId}><option value={4}>Aluno</option><option value={3}>Docente</option><option value={2}>Administrativo</option></select></div>
+                    </div>
+
+                    {/* Filiação */}
+                    <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: '20px' }}>
+                        <h4 style={{ fontSize: '14px', fontWeight: 600, color: '#111827', marginBottom: '16px' }}>Filiação</h4>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                            <div><label className="form-label">Nome do Pai *</label><input type="text" value={form.nomePai} onChange={(e) => setForm({ ...form, nomePai: e.target.value })} className="form-input" /></div>
+                            <div><label className="form-label">Nome da Mãe *</label><input type="text" value={form.nomeMae} onChange={(e) => setForm({ ...form, nomeMae: e.target.value })} className="form-input" /></div>
                         </div>
                     </div>
-                ))}
-            </div>
 
-            <Modal
-                open={showModal}
-                onClose={() => setShowModal(false)}
-                title={editingId ? 'Editar Cadastro' : 'Novo Cadastro'}
-                maxWidth="max-w-2xl"
-                footer={
-                    <>
-                        <button onClick={() => setShowModal(false)} className="px-5 py-2.5 text-slate-500 font-medium hover:text-slate-700 transition-colors cursor-pointer">
-                            Cancelar
-                        </button>
-                        <button onClick={handleSave} disabled={saving}
-                            className="px-6 py-2.5 bg-teal-600 text-white rounded-md text-sm font-medium hover:bg-teal-700 transition-colors cursor-pointer disabled:opacity-50">
-                            {saving ? 'Salvando...' : 'Salvar'}
-                        </button>
-                    </>
-                }
-            >
-                <div className="space-y-5">
-                    {error && <div className="bg-red-50 text-red-600 text-sm rounded-sm p-3 border border-red-200">{error}</div>}
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                        <div className="md:col-span-2">
-                            <label className="block text-sm font-medium text-slate-600 mb-2">Nome Completo</label>
-                            <input type="text" value={form.nomeCompleto} onChange={(e) => setForm({ ...form, nomeCompleto: e.target.value })}
-                                className={inputClass} placeholder="Ex: Maria da Silva" />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-slate-600 mb-2">CPF</label>
-                            <input type="text" value={form.cpf} onChange={(e) => setForm({ ...form, cpf: e.target.value })}
-                                className={inputClass} placeholder="000.000.000-00" />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-slate-600 mb-2">RG</label>
-                            <input type="text" value={form.rg} onChange={(e) => setForm({ ...form, rg: e.target.value })}
-                                className={inputClass} />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-slate-600 mb-2">Data de Nascimento</label>
-                            <input type="date" value={form.dataNascimento} onChange={(e) => setForm({ ...form, dataNascimento: e.target.value })}
-                                className={inputClass} />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-slate-600 mb-2">Perfil</label>
-                            <select value={form.perfil} onChange={(e) => setForm({ ...form, perfil: parseInt(e.target.value) })}
-                                className={selectClass} disabled={!!editingId}>
-                                <option value={0}>Aluno</option>
-                                <option value={1}>Docente</option>
-                                <option value={2}>Administrativo</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-slate-600 mb-2">Logradouro</label>
-                            <input type="text" value={form.logradouro} onChange={(e) => setForm({ ...form, logradouro: e.target.value })}
-                                className={inputClass} />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-slate-600 mb-2">Número</label>
-                            <input type="text" value={form.numero} onChange={(e) => setForm({ ...form, numero: e.target.value })}
-                                className={inputClass} />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-slate-600 mb-2">CEP</label>
-                            <input type="text" value={form.cep} onChange={(e) => setForm({ ...form, cep: e.target.value })}
-                                className={inputClass} />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-slate-600 mb-2">Bairro</label>
-                            <input type="text" value={form.bairro} onChange={(e) => setForm({ ...form, bairro: e.target.value })}
-                                className={inputClass} />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-slate-600 mb-2">Cidade</label>
-                            <input type="text" value={form.cidade} onChange={(e) => setForm({ ...form, cidade: e.target.value })}
-                                className={inputClass} />
+                    {/* Endereço */}
+                    <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: '20px' }}>
+                        <h4 style={{ fontSize: '14px', fontWeight: 600, color: '#111827', marginBottom: '16px' }}>Endereço</h4>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                            <div><label className="form-label">Logradouro</label><input type="text" value={form.logradouro} onChange={(e) => setForm({ ...form, logradouro: e.target.value })} className="form-input" /></div>
+                            <div><label className="form-label">Número</label><input type="text" value={form.numero} onChange={(e) => setForm({ ...form, numero: e.target.value })} className="form-input" /></div>
+                            <div><label className="form-label">CEP</label><input type="text" value={form.cep} onChange={(e) => setForm({ ...form, cep: e.target.value })} className="form-input" /></div>
+                            <div><label className="form-label">Bairro</label><input type="text" value={form.bairro} onChange={(e) => setForm({ ...form, bairro: e.target.value })} className="form-input" /></div>
+                            <div><label className="form-label">Cidade</label><input type="text" value={form.cidade} onChange={(e) => setForm({ ...form, cidade: e.target.value })} className="form-input" /></div>
+                            <div><label className="form-label">Ponto de Referência</label><input type="text" value={form.pontoReferencia} onChange={(e) => setForm({ ...form, pontoReferencia: e.target.value })} className="form-input" placeholder="Próximo a..." /></div>
                         </div>
                     </div>
 
                     {/* Responsável Financeiro */}
-                    {!editingId && form.perfil === 0 && (
-                        <>
-                            <hr className="border-slate-200" />
-                            <h4 className="text-sm font-bold text-slate-700">Responsável Financeiro (opcional)</h4>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-600 mb-2">Nome</label>
-                                    <input type="text" value={form.nomeResponsavel} onChange={(e) => setForm({ ...form, nomeResponsavel: e.target.value })}
-                                        className={inputClass} />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-600 mb-2">CPF</label>
-                                    <input type="text" value={form.cpfResponsavel} onChange={(e) => setForm({ ...form, cpfResponsavel: e.target.value })}
-                                        className={inputClass} />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-600 mb-2">Telefone</label>
-                                    <input type="text" value={form.telefoneResponsavel} onChange={(e) => setForm({ ...form, telefoneResponsavel: e.target.value })}
-                                        className={inputClass} />
-                                </div>
+                    {!editingId && form.perfil === 4 && (
+                        <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: '20px' }}>
+                            <h4 style={{ fontSize: '14px', fontWeight: 600, color: '#111827', marginBottom: '4px' }}>Responsável Financeiro</h4>
+                            <p style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '16px' }}>Recomendado para facilitar contatos financeiros.</p>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
+                                <div><label className="form-label">Nome</label><input type="text" value={form.nomeResponsavel} onChange={(e) => setForm({ ...form, nomeResponsavel: e.target.value })} className="form-input" placeholder="Nome do pai, mãe, etc." /></div>
+                                <div><label className="form-label">CPF</label><input type="text" value={form.cpfResponsavel} onChange={(e) => setForm({ ...form, cpfResponsavel: e.target.value })} className="form-input" placeholder="000.000.000-00" /></div>
+                                <div><label className="form-label">Telefone</label><input type="text" value={form.telefoneResponsavel} onChange={(e) => setForm({ ...form, telefoneResponsavel: e.target.value })} className="form-input" placeholder="(00) 00000-0000" /></div>
                             </div>
-                        </>
+                        </div>
                     )}
                 </div>
             </Modal>
