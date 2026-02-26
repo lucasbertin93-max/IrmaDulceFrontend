@@ -78,6 +78,7 @@ export const financeiroService = {
     getMensalidades: (params) => api.get('/financeiro/mensalidades', { params }),
     getMensalidadesAluno: (alunoId) => api.get(`/financeiro/mensalidades/aluno/${alunoId}`),
     gerarMensalidades: (data) => api.post('/financeiro/mensalidades/gerar', data),
+    gerarBoletosAluno: (data) => api.post('/financeiro/mensalidades/gerar-aluno', data),
     registrarPagamento: (data) => api.post('/financeiro/mensalidades/pagamento', data),
     atualizarMensalidade: (id, data) => api.put(`/financeiro/mensalidades/${id}`, data),
     deletarMensalidade: (id) => api.delete(`/financeiro/mensalidades/${id}`),
