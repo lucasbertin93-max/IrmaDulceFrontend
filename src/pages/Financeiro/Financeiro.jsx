@@ -16,6 +16,12 @@ export default function Financeiro() {
     const [lancForm, setLancForm] = useState({ descricao: '', valor: 0, tipo: 0, data: new Date().toISOString().substring(0, 10) });
     const [saving, setSaving] = useState(false);
 
+    // Dashboard State
+    const [mesDashboard, setMesDashboard] = useState(new Date().toISOString().substring(0, 7));
+    const [dashModalOpen, setDashModalOpen] = useState(false);
+    const [dashModalTitle, setDashModalTitle] = useState('');
+    const [dashModalData, setDashModalData] = useState([]);
+
     // Gerar Boleto Modal State
     const [showBoletoModal, setShowBoletoModal] = useState(false);
     const [alunos, setAlunos] = useState([]);
@@ -30,18 +36,33 @@ export default function Financeiro() {
     const [pagamentoSelecionado, setPagamentoSelecionado] = useState(null);
     const [pagamentoForm, setPagamentoForm] = useState({ valorPago: 0, metodoPagamento: 1, observacao: '', dataPagamento: new Date().toISOString().substring(0, 10) });
 
-    useEffect(() => { loadData(); }, [tab]);
+    useEffect(() => { loadData(); }, [tab, mesDashboard]);
 
     const loadData = async () => {
         setLoading(true);
         try {
-            const hoje = new Date();
-            const inicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString();
-            const fim = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0).toISOString();
-            if (tab === 'dashboard') { const res = await financeiroService.getDashboard(inicio, fim); setDashboard(res.data); }
-            else if (tab === 'mensalidades') { const res = await financeiroService.getMensalidades({}); setMensalidades(Array.isArray(res.data) ? res.data : []); }
-            else { const res = await financeiroService.getLancamentos(inicio, fim); setLancamentos(Array.isArray(res.data) ? res.data : []); }
-        } catch { } finally { setLoading(false); }
+            const [ano, mes] = mesDashboard ? mesDashboard.split('-') : [new Date().getFullYear(), new Date().getMonth() + 1];
+            // Format to exact first and last day of the selected month
+            const inicio = new Date(parseInt(ano), parseInt(mes) - 1, 1).toISOString();
+            const fim = new Date(parseInt(ano), parseInt(mes), 0, 23, 59, 59).toISOString();
+
+            if (tab === 'dashboard') {
+                const [dashRes, menRes] = await Promise.all([
+                    financeiroService.getDashboard(inicio, fim),
+                    financeiroService.getMensalidades({})
+                ]);
+                setDashboard(dashRes.data);
+                setMensalidades(Array.isArray(menRes.data) ? menRes.data : []);
+            }
+            else if (tab === 'mensalidades') {
+                const res = await financeiroService.getMensalidades({});
+                setMensalidades(Array.isArray(res.data) ? res.data : []);
+            }
+            else {
+                const res = await financeiroService.getLancamentos(inicio, fim);
+                setLancamentos(Array.isArray(res.data) ? res.data : []);
+            }
+        } catch (e) { console.error(e); } finally { setLoading(false); }
     };
 
     const handleAddLancamento = async () => { setSaving(true); try { await financeiroService.adicionarLancamento(lancForm); setShowModal(false); loadData(); } catch (err) { alert(err.response?.data?.message || 'Erro.'); } finally { setSaving(false); } };
@@ -106,6 +127,25 @@ export default function Financeiro() {
         XLSX.writeFile(wb, `Relatorio_Mensalidades_${new Date().toISOString().substring(0, 10)}.xlsx`);
     };
 
+    const exp_dash_pdf = () => {
+        const printWindow = window.open('', '_blank');
+        const getRow = (m) => `<tr><td style="padding:8px;border-bottom:1px solid #ddd">${m.alunoNome || m.alunoId}</td><td style="padding:8px;border-bottom:1px solid #ddd">${m.responsavelNome || 'N/I'}</td><td style="padding:8px;border-bottom:1px solid #ddd">${fmtData(m.dataVencimento)}</td><td style="padding:8px;border-bottom:1px solid #ddd">${statusLabels[m.status]}</td><td style="padding:8px;border-bottom:1px solid #ddd;font-weight:bold">${fmt(m.valor)}</td></tr>`;
+
+        printWindow.document.write(`
+            <html><head><title>Relatório - ${dashModalTitle}</title></head>
+            <body style="font-family: sans-serif; padding: 20px;">
+                <h2>Relatório: ${dashModalTitle}</h2>
+                <table style="width:100%; text-align:left; border-collapse: collapse;">
+                    <thead><tr style="background:#f3f4f6"><th style="padding:8px">Aluno</th><th style="padding:8px">Responsável</th><th style="padding:8px">Vencimento</th><th style="padding:8px">Status</th><th style="padding:8px">Valor</th></tr></thead>
+                    <tbody>${dashModalData.map(getRow).join('')}</tbody>
+                </table>
+                <p style="margin-top:20px; font-weight:bold;">Total de Registros: ${dashModalData.length}</p>
+            </body></html>
+        `);
+        printWindow.document.close();
+        printWindow.print();
+    };
+
     const exportPDF = () => { window.print(); };
 
     const fmt = (v) => `R$ ${(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
@@ -143,7 +183,38 @@ export default function Financeiro() {
         return { filtradas, agrupadas, mesesOrdenados };
     };
 
+    const getDashboardMetrics = () => {
+        let emitidasMes = { count: 0, sum: 0, list: [] };
+        let emitidasGeral = { count: 0, sum: 0, list: [] };
+        let atrasadasMes = { count: 0, sum: 0, list: [] };
+        let atrasadasGeral = { count: 0, sum: 0, list: [] };
+        let pagasMes = { count: 0, sum: 0, list: [] };
+        let pagasGeral = { count: 0, sum: 0, list: [] };
+
+        const [anoD, mesD] = mesDashboard ? mesDashboard.split('-') : [null, null];
+
+        mensalidades.forEach(m => {
+            emitidasGeral.count++; emitidasGeral.sum += m.valor; emitidasGeral.list.push(m);
+            if (m.status === 3) { atrasadasGeral.count++; atrasadasGeral.sum += m.valor; atrasadasGeral.list.push(m); }
+            if (m.status === 1) { pagasGeral.count++; pagasGeral.sum += m.valor; pagasGeral.list.push(m); }
+
+            if (anoD && mesD && m.anoReferencia === parseInt(anoD) && m.mesReferencia === parseInt(mesD)) {
+                emitidasMes.count++; emitidasMes.sum += m.valor; emitidasMes.list.push(m);
+                if (m.status === 3) { atrasadasMes.count++; atrasadasMes.sum += m.valor; atrasadasMes.list.push(m); }
+                if (m.status === 1) { pagasMes.count++; pagasMes.sum += m.valor; pagasMes.list.push(m); }
+            }
+        });
+        return { emitidasMes, emitidasGeral, atrasadasMes, atrasadasGeral, pagasMes, pagasGeral };
+    };
+
     const agrupamento = getMensalidadesAgrupadas(); // For rendering inside tab
+    const dashMetrics = getDashboardMetrics();
+
+    const openDashModal = (title, list) => {
+        setDashModalTitle(title);
+        setDashModalData(list);
+        setDashModalOpen(true);
+    };
 
     return (
         <div>
@@ -160,10 +231,61 @@ export default function Financeiro() {
             {loading && <p style={{ color: '#9ca3af', fontSize: '14px' }}>Carregando...</p>}
 
             {tab === 'dashboard' && dashboard && (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px' }}>
-                    <div className="stat-card"><div className="stat-card-label">Total Entradas</div><div className="stat-card-value" style={{ color: '#16a34a' }}>{fmt(dashboard.totalEntradas)}</div></div>
-                    <div className="stat-card"><div className="stat-card-label">Total Saídas</div><div className="stat-card-value" style={{ color: '#dc2626' }}>{fmt(dashboard.totalSaidas)}</div></div>
-                    <div className="stat-card"><div className="stat-card-label">Saldo</div><div className="stat-card-value" style={{ color: '#2563eb' }}>{fmt(dashboard.saldo)}</div></div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+
+                    {/* Resumo Caixa */}
+                    <div>
+                        <h3 style={{ fontSize: '18px', fontWeight: 600, color: '#1f2937', marginBottom: '16px' }}>Resumo de Caixa (Mês Atual)</h3>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px' }}>
+                            <div className="stat-card"><div className="stat-card-label">Total Entradas</div><div className="stat-card-value" style={{ color: '#16a34a' }}>{fmt(dashboard.totalEntradas)}</div></div>
+                            <div className="stat-card"><div className="stat-card-label">Total Saídas</div><div className="stat-card-value" style={{ color: '#dc2626' }}>{fmt(dashboard.totalSaidas)}</div></div>
+                            <div className="stat-card"><div className="stat-card-label">Saldo</div><div className="stat-card-value" style={{ color: '#2563eb' }}>{fmt(dashboard.saldo)}</div></div>
+                        </div>
+                    </div>
+
+                    {/* Resumo Boletos */}
+                    <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '32px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                            <h3 style={{ fontSize: '18px', fontWeight: 600, color: '#1f2937', margin: 0 }}>Indicadores de Mensalidades (Duplo clique para detalhar)</h3>
+                            <input type="month" value={mesDashboard} onChange={(e) => setMesDashboard(e.target.value)} className="form-input" style={{ width: '180px' }} />
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px' }}>
+                            {/* Linha 1 */}
+                            <div className="stat-card hoverable" onDoubleClick={() => openDashModal(`Emitidas no Mês (${mesDashboard})`, dashMetrics.emitidasMes.list)} style={{ cursor: 'pointer', borderLeft: '4px solid #3b82f6' }}>
+                                <div className="stat-card-label">Emitidas (Mês)</div>
+                                <div className="stat-card-value" style={{ color: '#1f2937', fontSize: '24px' }}>{dashMetrics.emitidasMes.count}</div>
+                                <div style={{ fontSize: '14px', color: '#6b7280', marginTop: '4px' }}>{fmt(dashMetrics.emitidasMes.sum)}</div>
+                            </div>
+                            <div className="stat-card hoverable" onDoubleClick={() => openDashModal(`Pagas no Mês (${mesDashboard})`, dashMetrics.pagasMes.list)} style={{ cursor: 'pointer', borderLeft: '4px solid #10b981' }}>
+                                <div className="stat-card-label">Pagas (Mês)</div>
+                                <div className="stat-card-value" style={{ color: '#059669', fontSize: '24px' }}>{dashMetrics.pagasMes.count}</div>
+                                <div style={{ fontSize: '14px', color: '#6b7280', marginTop: '4px' }}>{fmt(dashMetrics.pagasMes.sum)}</div>
+                            </div>
+                            <div className="stat-card hoverable" onDoubleClick={() => openDashModal(`Atrasadas no Mês (${mesDashboard})`, dashMetrics.atrasadasMes.list)} style={{ cursor: 'pointer', borderLeft: '4px solid #f97316' }}>
+                                <div className="stat-card-label">Atrasadas (Mês)</div>
+                                <div className="stat-card-value" style={{ color: '#ea580c', fontSize: '24px' }}>{dashMetrics.atrasadasMes.count}</div>
+                                <div style={{ fontSize: '14px', color: '#6b7280', marginTop: '4px' }}>{fmt(dashMetrics.atrasadasMes.sum)}</div>
+                            </div>
+
+                            {/* Linha 2 */}
+                            <div className="stat-card hoverable" onDoubleClick={() => openDashModal('Todas as Mensalidades (Geral)', dashMetrics.emitidasGeral.list)} style={{ cursor: 'pointer', borderLeft: '4px solid #8b5cf6' }}>
+                                <div className="stat-card-label">Emitidas (Geral)</div>
+                                <div className="stat-card-value" style={{ color: '#1f2937', fontSize: '24px' }}>{dashMetrics.emitidasGeral.count}</div>
+                                <div style={{ fontSize: '14px', color: '#6b7280', marginTop: '4px' }}>{fmt(dashMetrics.emitidasGeral.sum)}</div>
+                            </div>
+                            <div className="stat-card hoverable" onDoubleClick={() => openDashModal('Todas as Pagas (Geral)', dashMetrics.pagasGeral.list)} style={{ cursor: 'pointer', borderLeft: '4px solid #059669' }}>
+                                <div className="stat-card-label">Pagas (Total)</div>
+                                <div className="stat-card-value" style={{ color: '#059669', fontSize: '24px' }}>{dashMetrics.pagasGeral.count}</div>
+                                <div style={{ fontSize: '14px', color: '#6b7280', marginTop: '4px' }}>{fmt(dashMetrics.pagasGeral.sum)}</div>
+                            </div>
+                            <div className="stat-card hoverable" onDoubleClick={() => openDashModal('Todas as Atrasadas (Geral)', dashMetrics.atrasadasGeral.list)} style={{ cursor: 'pointer', borderLeft: '4px solid #dc2626' }}>
+                                <div className="stat-card-label">Atrasadas (Total)</div>
+                                <div className="stat-card-value" style={{ color: '#dc2626', fontSize: '24px' }}>{dashMetrics.atrasadasGeral.count}</div>
+                                <div style={{ fontSize: '14px', color: '#6b7280', marginTop: '4px' }}>{fmt(dashMetrics.atrasadasGeral.sum)}</div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             )}
 
@@ -322,6 +444,31 @@ export default function Financeiro() {
                         </div>
                     </div>
                 )}
+            </Modal>
+            <Modal open={dashModalOpen} onClose={() => setDashModalOpen(false)} title={dashModalTitle} maxWidth="900px"
+                footer={<><button onClick={() => setDashModalOpen(false)} className="btn-cancel">Fechar</button><button onClick={exp_dash_pdf} className="btn-secondary">🖨️ Imprimir PDF</button></>}>
+                <div style={{ maxHeight: '60vh', overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: '8px' }}>
+                    {dashModalData.length === 0 ? <p style={{ padding: '24px', textAlign: 'center', color: '#6b7280' }}>Nenhuma mensalidade encontrada.</p> : (
+                        <table className="data-table" style={{ margin: 0 }}>
+                            <thead style={{ background: '#f9fafb', position: 'sticky', top: 0, zIndex: 10 }}><tr><th>Aluno</th><th>Responsável / Turma</th><th>Valor</th><th>Vencimento</th><th>Status</th></tr></thead>
+                            <tbody>{dashModalData.map(m => (
+                                <tr key={m.id}>
+                                    <td style={{ fontWeight: 500, borderBottom: '1px solid #f3f4f6' }}>
+                                        <div style={{ color: '#111827' }}>{m.alunoNome || m.alunoId}</div>
+                                        <div style={{ fontSize: '12px', color: '#6b7280' }}>{m.alunoIdFuncional}</div>
+                                    </td>
+                                    <td style={{ borderBottom: '1px solid #f3f4f6' }}>
+                                        <div style={{ color: '#374151', fontSize: '13px' }}>{m.responsavelNome || 'N/I'}</div>
+                                        <div style={{ fontSize: '12px', color: '#6b7280' }}>{m.turmaNome || 'S/ Turma'}</div>
+                                    </td>
+                                    <td style={{ fontWeight: 600, borderBottom: '1px solid #f3f4f6' }}>{fmt(m.valor)}</td>
+                                    <td style={{ borderBottom: '1px solid #f3f4f6' }}>{fmtData(m.dataVencimento)}</td>
+                                    <td style={{ borderBottom: '1px solid #f3f4f6' }}><span className="badge" style={{ background: statusColors[m.status]?.bg, color: statusColors[m.status]?.color }}>{statusLabels[m.status]}</span></td>
+                                </tr>
+                            ))}</tbody>
+                        </table>
+                    )}
+                </div>
             </Modal>
         </div>
     );

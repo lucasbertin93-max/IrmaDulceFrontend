@@ -11,13 +11,17 @@ export default function Cadastro() {
     const [editingId, setEditingId] = useState(null);
     const [form, setForm] = useState({
         nomeCompleto: '', cpf: '', rg: '', dataNascimento: '', perfil: 4,
-        estadoCivil: 1, naturalidade: '', nacionalidade: 'Brasileira',
+        sexo: 1, estadoCivil: 1, naturalidade: '', nacionalidade: 'Brasileira', telefone: '', email: '',
         logradouro: '', numero: '', cep: '', bairro: '', cidade: '',
         pontoReferencia: '', nomePai: '', nomeMae: '',
-        nomeResponsavel: '', cpfResponsavel: '', telefoneResponsavel: '',
+        nomeResponsavel: '', cpfResponsavel: '', rgResponsavel: '', dataNascimentoResponsavel: '', sexoResponsavel: 1, estadoCivilResponsavel: 1,
+        naturalidadeResponsavel: '', nacionalidadeResponsavel: 'Brasileira', telefoneResponsavel: '', emailResponsavel: '',
+        logradouroResponsavel: '', numeroResponsavel: '', cepResponsavel: '', bairroResponsavel: '', cidadeResponsavel: '',
+        nomePaiResponsavel: '', nomeMaeResponsavel: ''
     });
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
+    const [alunoIsResponsavel, setAlunoIsResponsavel] = useState(false);
 
     const estadosCivis = ['Solteiro(a)', 'Casado(a)', 'Divorciado(a)', 'Viúvo(a)', 'União Estável'];
 
@@ -34,12 +38,16 @@ export default function Cadastro() {
 
     const openNew = () => {
         setEditingId(null);
+        setAlunoIsResponsavel(false);
         setForm({
             nomeCompleto: '', cpf: '', rg: '', dataNascimento: '', perfil: 4,
-            estadoCivil: 1, naturalidade: '', nacionalidade: 'Brasileira',
+            sexo: 1, estadoCivil: 1, naturalidade: '', nacionalidade: 'Brasileira', telefone: '', email: '',
             logradouro: '', numero: '', cep: '', bairro: '', cidade: '',
             pontoReferencia: '', nomePai: '', nomeMae: '',
-            nomeResponsavel: '', cpfResponsavel: '', telefoneResponsavel: '',
+            nomeResponsavel: '', cpfResponsavel: '', rgResponsavel: '', dataNascimentoResponsavel: '', sexoResponsavel: 1, estadoCivilResponsavel: 1,
+            naturalidadeResponsavel: '', nacionalidadeResponsavel: 'Brasileira', telefoneResponsavel: '', emailResponsavel: '',
+            logradouroResponsavel: '', numeroResponsavel: '', cepResponsavel: '', bairroResponsavel: '', cidadeResponsavel: '',
+            nomePaiResponsavel: '', nomeMaeResponsavel: ''
         });
         setError('');
         setShowModal(true);
@@ -47,13 +55,17 @@ export default function Cadastro() {
 
     const openEdit = (p) => {
         setEditingId(p.id);
+        setAlunoIsResponsavel(false);
         setForm({
             nomeCompleto: p.nomeCompleto || '', cpf: p.cpf || '', rg: p.rg || '',
             dataNascimento: p.dataNascimento?.substring(0, 10) || '', perfil: p.perfil ?? 4,
-            estadoCivil: p.estadoCivil ?? 1, naturalidade: p.naturalidade || '', nacionalidade: p.nacionalidade || 'Brasileira',
+            sexo: p.sexo ?? 1, estadoCivil: p.estadoCivil ?? 1, naturalidade: p.naturalidade || '', nacionalidade: p.nacionalidade || 'Brasileira', telefone: p.telefone || '', email: p.email || '',
             logradouro: p.logradouro || '', numero: p.numero || '', cep: p.cep || '', bairro: p.bairro || '', cidade: p.cidade || '',
             pontoReferencia: p.pontoReferencia || '', nomePai: p.nomePai || '', nomeMae: p.nomeMae || '',
-            nomeResponsavel: '', cpfResponsavel: '', telefoneResponsavel: '',
+            nomeResponsavel: '', cpfResponsavel: '', rgResponsavel: '', dataNascimentoResponsavel: '', sexoResponsavel: 1, estadoCivilResponsavel: 1,
+            naturalidadeResponsavel: '', nacionalidadeResponsavel: 'Brasileira', telefoneResponsavel: '', emailResponsavel: '',
+            logradouroResponsavel: '', numeroResponsavel: '', cepResponsavel: '', bairroResponsavel: '', cidadeResponsavel: '',
+            nomePaiResponsavel: '', nomeMaeResponsavel: ''
         });
         setError('');
         setShowModal(true);
@@ -68,6 +80,7 @@ export default function Cadastro() {
                 nomeCompleto: form.nomeCompleto,
                 rg: form.rg,
                 cpf: form.cpf,
+                sexo: parseInt(form.sexo) || 1,
                 estadoCivil: parseInt(form.estadoCivil) || 1,
                 dataNascimento: form.dataNascimento,
                 naturalidade: form.naturalidade,
@@ -78,11 +91,32 @@ export default function Cadastro() {
                 bairro: form.bairro,
                 cidade: form.cidade,
                 pontoReferencia: form.pontoReferencia || null,
+                telefone: form.telefone,
+                email: form.email,
                 nomePai: form.nomePai,
                 nomeMae: form.nomeMae,
                 perfil: parseInt(form.perfil) || 4,
                 responsavelFinanceiroId: null,
-                responsavelFinanceiro: null,
+                responsavelFinanceiro: (alunoIsResponsavel || !!editingId) ? null : {
+                    nomeCompleto: form.nomeResponsavel,
+                    cpf: form.cpfResponsavel,
+                    rg: form.rgResponsavel,
+                    telefone: form.telefoneResponsavel,
+                    email: form.emailResponsavel,
+                    sexo: parseInt(form.sexoResponsavel) || 1,
+                    estadoCivil: parseInt(form.estadoCivilResponsavel) || 1,
+                    dataNascimento: form.dataNascimentoResponsavel || new Date().toISOString(),
+                    naturalidade: form.naturalidadeResponsavel,
+                    nacionalidade: form.nacionalidadeResponsavel || 'Brasileira',
+                    logradouro: form.logradouroResponsavel,
+                    numero: form.numeroResponsavel,
+                    cep: form.cepResponsavel,
+                    bairro: form.bairroResponsavel,
+                    cidade: form.cidadeResponsavel,
+                    nomePai: form.nomePaiResponsavel,
+                    nomeMae: form.nomeMaeResponsavel,
+                    perfil: 4
+                },
             };
 
             if (editingId) { await pessoaService.atualizar(editingId, payload); }
@@ -193,9 +227,18 @@ export default function Cadastro() {
                         <div><label className="form-label">CPF *</label><input type="text" value={form.cpf} onChange={(e) => setForm({ ...form, cpf: e.target.value })} className="form-input" placeholder="000.000.000-00" /></div>
                         <div><label className="form-label">RG *</label><input type="text" value={form.rg} onChange={(e) => setForm({ ...form, rg: e.target.value })} className="form-input" /></div>
                         <div><label className="form-label">Data de Nascimento *</label><input type="date" value={form.dataNascimento} onChange={(e) => setForm({ ...form, dataNascimento: e.target.value })} className="form-input" /></div>
+                        <div><label className="form-label">Sexo *</label><select value={form.sexo} onChange={(e) => setForm({ ...form, sexo: parseInt(e.target.value) })} className="form-select"><option value={1}>Masculino</option><option value={2}>Feminino</option><option value={3}>Outro</option><option value={4}>Não Informado</option></select></div>
                         <div><label className="form-label">Estado Civil *</label><select value={form.estadoCivil} onChange={(e) => setForm({ ...form, estadoCivil: parseInt(e.target.value) })} className="form-select"><option value={1}>Solteiro(a)</option><option value={2}>Casado(a)</option><option value={3}>Divorciado(a)</option><option value={4}>Viúvo(a)</option><option value={5}>Outro</option></select></div>
                         <div><label className="form-label">Naturalidade *</label><input type="text" value={form.naturalidade} onChange={(e) => setForm({ ...form, naturalidade: e.target.value })} className="form-input" placeholder="Ex: São Paulo - SP" /></div>
                         <div><label className="form-label">Nacionalidade *</label><input type="text" value={form.nacionalidade} onChange={(e) => setForm({ ...form, nacionalidade: e.target.value })} className="form-input" placeholder="Ex: Brasileira" /></div>
+                        <div><label className="form-label">Telefone *</label><input type="text" value={form.telefone} onChange={(e) => {
+                            setForm({ ...form, telefone: e.target.value });
+                            if (alunoIsResponsavel) setForm(curr => ({ ...curr, telefoneResponsavel: e.target.value }));
+                        }} className="form-input" placeholder="(00) 00000-0000" /></div>
+                        <div><label className="form-label">Email *</label><input type="email" value={form.email} onChange={(e) => {
+                            setForm({ ...form, email: e.target.value });
+                            if (alunoIsResponsavel) setForm(curr => ({ ...curr, emailResponsavel: e.target.value }));
+                        }} className="form-input" placeholder="email@exemplo.com" /></div>
                         <div><label className="form-label">Perfil *</label><select value={form.perfil} onChange={(e) => setForm({ ...form, perfil: parseInt(e.target.value) })} className="form-select" disabled={!!editingId}><option value={4}>Aluno</option><option value={3}>Docente</option><option value={2}>Administrativo</option></select></div>
                     </div>
 
@@ -224,12 +267,75 @@ export default function Cadastro() {
                     {/* Responsável Financeiro */}
                     {!editingId && form.perfil === 4 && (
                         <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: '20px' }}>
-                            <h4 style={{ fontSize: '14px', fontWeight: 600, color: '#111827', marginBottom: '4px' }}>Responsável Financeiro</h4>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                <h4 style={{ fontSize: '14px', fontWeight: 600, color: '#111827' }}>Responsável Financeiro</h4>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#4b5563', cursor: 'pointer' }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={alunoIsResponsavel}
+                                        onChange={(e) => {
+                                            const isChecked = e.target.checked;
+                                            setAlunoIsResponsavel(isChecked);
+                                            if (isChecked) {
+                                                setForm({
+                                                    ...form,
+                                                    nomeResponsavel: form.nomeCompleto,
+                                                    cpfResponsavel: form.cpf,
+                                                    rgResponsavel: form.rg,
+                                                    dataNascimentoResponsavel: form.dataNascimento,
+                                                    sexoResponsavel: form.sexo,
+                                                    estadoCivilResponsavel: form.estadoCivil,
+                                                    naturalidadeResponsavel: form.naturalidade,
+                                                    nacionalidadeResponsavel: form.nacionalidade,
+                                                    telefoneResponsavel: form.telefone,
+                                                    emailResponsavel: form.email,
+                                                    logradouroResponsavel: form.logradouro,
+                                                    numeroResponsavel: form.numero,
+                                                    cepResponsavel: form.cep,
+                                                    bairroResponsavel: form.bairro,
+                                                    cidadeResponsavel: form.cidade,
+                                                    nomePaiResponsavel: form.nomePai,
+                                                    nomeMaeResponsavel: form.nomeMae
+                                                });
+                                            }
+                                        }}
+                                        style={{ width: '16px', height: '16px', accentColor: '#2563eb' }}
+                                    />
+                                    <strong>O Aluno será o responsável financeiro</strong>
+                                </label>
+                            </div>
                             <p style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '16px' }}>Recomendado para facilitar contatos financeiros.</p>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
-                                <div><label className="form-label">Nome</label><input type="text" value={form.nomeResponsavel} onChange={(e) => setForm({ ...form, nomeResponsavel: e.target.value })} className="form-input" placeholder="Nome do pai, mãe, etc." /></div>
-                                <div><label className="form-label">CPF</label><input type="text" value={form.cpfResponsavel} onChange={(e) => setForm({ ...form, cpfResponsavel: e.target.value })} className="form-input" placeholder="000.000.000-00" /></div>
-                                <div><label className="form-label">Telefone</label><input type="text" value={form.telefoneResponsavel} onChange={(e) => setForm({ ...form, telefoneResponsavel: e.target.value })} className="form-input" placeholder="(00) 00000-0000" /></div>
+
+                            <h5 style={{ fontSize: '13px', fontWeight: 600, color: '#4b5563', marginBottom: '8px' }}>Dados Pessoais (Responsável)</h5>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+                                <div style={{ gridColumn: 'span 2' }}>
+                                    <label className="form-label">Nome Completo *</label>
+                                    <input type="text" value={form.nomeResponsavel} onChange={(e) => setForm({ ...form, nomeResponsavel: e.target.value })} disabled={alunoIsResponsavel} className={`form-input ${alunoIsResponsavel ? 'disabled' : ''}`} />
+                                </div>
+                                <div><label className="form-label">CPF *</label><input type="text" value={form.cpfResponsavel} onChange={(e) => setForm({ ...form, cpfResponsavel: e.target.value })} disabled={alunoIsResponsavel} className={`form-input ${alunoIsResponsavel ? 'disabled' : ''}`} placeholder="000.000.000-00" /></div>
+                                <div><label className="form-label">RG *</label><input type="text" value={form.rgResponsavel} onChange={(e) => setForm({ ...form, rgResponsavel: e.target.value })} disabled={alunoIsResponsavel} className={`form-input ${alunoIsResponsavel ? 'disabled' : ''}`} /></div>
+                                <div><label className="form-label">Data de Nascimento *</label><input type="date" value={form.dataNascimentoResponsavel} onChange={(e) => setForm({ ...form, dataNascimentoResponsavel: e.target.value })} disabled={alunoIsResponsavel} className={`form-input ${alunoIsResponsavel ? 'disabled' : ''}`} /></div>
+                                <div><label className="form-label">Sexo *</label><select value={form.sexoResponsavel} onChange={(e) => setForm({ ...form, sexoResponsavel: parseInt(e.target.value) })} disabled={alunoIsResponsavel} className={`form-select ${alunoIsResponsavel ? 'disabled' : ''}`}><option value={1}>Masculino</option><option value={2}>Feminino</option><option value={3}>Outro</option><option value={4}>Não Informado</option></select></div>
+                                <div><label className="form-label">Estado Civil *</label><select value={form.estadoCivilResponsavel} onChange={(e) => setForm({ ...form, estadoCivilResponsavel: parseInt(e.target.value) })} disabled={alunoIsResponsavel} className={`form-select ${alunoIsResponsavel ? 'disabled' : ''}`}><option value={1}>Solteiro(a)</option><option value={2}>Casado(a)</option><option value={3}>Divorciado(a)</option><option value={4}>Viúvo(a)</option><option value={5}>Outro</option></select></div>
+                                <div><label className="form-label">Naturalidade *</label><input type="text" value={form.naturalidadeResponsavel} onChange={(e) => setForm({ ...form, naturalidadeResponsavel: e.target.value })} disabled={alunoIsResponsavel} className={`form-input ${alunoIsResponsavel ? 'disabled' : ''}`} /></div>
+                                <div><label className="form-label">Nacionalidade *</label><input type="text" value={form.nacionalidadeResponsavel} onChange={(e) => setForm({ ...form, nacionalidadeResponsavel: e.target.value })} disabled={alunoIsResponsavel} className={`form-input ${alunoIsResponsavel ? 'disabled' : ''}`} /></div>
+                                <div><label className="form-label">Telefone *</label><input type="text" value={form.telefoneResponsavel} onChange={(e) => setForm({ ...form, telefoneResponsavel: e.target.value })} disabled={alunoIsResponsavel} className={`form-input ${alunoIsResponsavel ? 'disabled' : ''}`} placeholder="(00) 00000-0000" /></div>
+                                <div><label className="form-label">Email *</label><input type="email" value={form.emailResponsavel} onChange={(e) => setForm({ ...form, emailResponsavel: e.target.value })} disabled={alunoIsResponsavel} className={`form-input ${alunoIsResponsavel ? 'disabled' : ''}`} placeholder="email@exemplo.com" /></div>
+                            </div>
+
+                            <h5 style={{ fontSize: '13px', fontWeight: 600, color: '#4b5563', marginBottom: '8px' }}>Filiação (Responsável)</h5>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+                                <div><label className="form-label">Nome do Pai *</label><input type="text" value={form.nomePaiResponsavel} onChange={(e) => setForm({ ...form, nomePaiResponsavel: e.target.value })} disabled={alunoIsResponsavel} className={`form-input ${alunoIsResponsavel ? 'disabled' : ''}`} /></div>
+                                <div><label className="form-label">Nome da Mãe *</label><input type="text" value={form.nomeMaeResponsavel} onChange={(e) => setForm({ ...form, nomeMaeResponsavel: e.target.value })} disabled={alunoIsResponsavel} className={`form-input ${alunoIsResponsavel ? 'disabled' : ''}`} /></div>
+                            </div>
+
+                            <h5 style={{ fontSize: '13px', fontWeight: 600, color: '#4b5563', marginBottom: '8px' }}>Endereço (Responsável)</h5>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                                <div><label className="form-label">Logradouro</label><input type="text" value={form.logradouroResponsavel} onChange={(e) => setForm({ ...form, logradouroResponsavel: e.target.value })} disabled={alunoIsResponsavel} className={`form-input ${alunoIsResponsavel ? 'disabled' : ''}`} /></div>
+                                <div><label className="form-label">Número</label><input type="text" value={form.numeroResponsavel} onChange={(e) => setForm({ ...form, numeroResponsavel: e.target.value })} disabled={alunoIsResponsavel} className={`form-input ${alunoIsResponsavel ? 'disabled' : ''}`} /></div>
+                                <div><label className="form-label">CEP</label><input type="text" value={form.cepResponsavel} onChange={(e) => setForm({ ...form, cepResponsavel: e.target.value })} disabled={alunoIsResponsavel} className={`form-input ${alunoIsResponsavel ? 'disabled' : ''}`} /></div>
+                                <div><label className="form-label">Bairro</label><input type="text" value={form.bairroResponsavel} onChange={(e) => setForm({ ...form, bairroResponsavel: e.target.value })} disabled={alunoIsResponsavel} className={`form-input ${alunoIsResponsavel ? 'disabled' : ''}`} /></div>
+                                <div><label className="form-label">Cidade</label><input type="text" value={form.cidadeResponsavel} onChange={(e) => setForm({ ...form, cidadeResponsavel: e.target.value })} disabled={alunoIsResponsavel} className={`form-input ${alunoIsResponsavel ? 'disabled' : ''}`} /></div>
                             </div>
                         </div>
                     )}

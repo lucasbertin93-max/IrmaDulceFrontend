@@ -24,7 +24,7 @@ export default function Turmas() {
     const [alunosLoading, setAlunosLoading] = useState(false);
     const [alunoSearch, setAlunoSearch] = useState('');
     const [showAllAlunos, setShowAllAlunos] = useState(false);
-
+    const [showMatriculadosView, setShowMatriculadosView] = useState(false);
     // Discipline-Docente modal
     const [showDiscModal, setShowDiscModal] = useState(false);
     const [discTurma, setDiscTurma] = useState(null);
@@ -57,6 +57,7 @@ export default function Turmas() {
         setAlunosLoading(true);
         setAlunoSearch('');
         setShowAllAlunos(false);
+        setShowMatriculadosView(false);
         setShowAlunosModal(true);
         try {
             const [alunosRes, matriculasRes] = await Promise.all([
@@ -326,37 +327,64 @@ export default function Turmas() {
                     ) : alunos.length === 0 ? (
                         <p style={{ color: '#9ca3af', fontSize: '14px', textAlign: 'center', padding: '24px 0' }}>Nenhum aluno cadastrado.</p>
                     ) : (
-                        <div>
-                            <p style={{ fontSize: '13px', color: '#6b7280', marginBottom: '12px' }}>Selecione os alunos para matricular nesta turma.</p>
-                            <div style={{ marginBottom: '12px' }}>
-                                <input type="text" placeholder="Buscar aluno por nome, CPF ou ID... (duplo clique para listar todos)" value={alunoSearch} onChange={(e) => { setAlunoSearch(e.target.value); if (!e.target.value) setShowAllAlunos(false); }} onDoubleClick={() => { setShowAllAlunos(true); setAlunoSearch(''); }} className="form-input" style={{ fontSize: '13px' }} />
-                            </div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '400px', overflowY: 'auto' }}>
-                                {filteredAlunos.map(a => {
-                                    const isLinked = isAlunoMatriculado(a.id);
-                                    return (
-                                        <button key={a.id} onClick={() => toggleAluno(a)} style={{
-                                            width: '100%', textAlign: 'left', padding: '14px 16px', borderRadius: '10px',
-                                            fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '12px',
-                                            border: isLinked ? '1.5px solid #16a34a' : '1px solid #e5e7eb',
-                                            background: isLinked ? '#f0fdf4' : 'white', transition: 'all 0.15s ease',
-                                        }}>
-                                            <div style={{ width: '20px', height: '20px', borderRadius: '6px', flexShrink: 0, border: isLinked ? '2px solid #16a34a' : '2px solid #d1d5db', background: isLinked ? '#16a34a' : 'white', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                {isLinked && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>}
+                        <>
+                            {showMatriculadosView ? (
+                                <div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                                        <p style={{ fontSize: '14px', fontWeight: 600, color: '#111827', margin: 0 }}>Alunos Matriculados ({alunosMatriculados.length})</p>
+                                        <button onClick={() => setShowMatriculadosView(false)} style={{ fontSize: '13px', color: '#2563eb', cursor: 'pointer', background: 'none', border: 'none', fontWeight: 500 }}>Voltar para busca</button>
+                                    </div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '400px', overflowY: 'auto' }}>
+                                        {alunos.filter(a => isAlunoMatriculado(a.id)).map(a => (
+                                            <div key={a.id} style={{
+                                                width: '100%', padding: '14px 16px', borderRadius: '10px',
+                                                fontSize: '14px', display: 'flex', alignItems: 'center', gap: '12px',
+                                                border: '1px solid #e5e7eb', background: '#f9fafb'
+                                            }}>
+                                                <div className="avatar-sm" style={{ width: '32px', height: '32px', fontSize: '13px' }}>{a.nomeCompleto?.charAt(0) || 'A'}</div>
+                                                <div style={{ flex: 1 }}>
+                                                    <div style={{ fontWeight: 500, color: '#111827' }}>{a.nomeCompleto}</div>
+                                                    <div style={{ fontSize: '12px', color: '#9ca3af', marginTop: '2px' }}>{a.idFuncional} • CPF: {a.cpf}</div>
+                                                </div>
                                             </div>
-                                            <div className="avatar-sm" style={{ width: '32px', height: '32px', fontSize: '13px' }}>{a.nomeCompleto?.charAt(0) || 'A'}</div>
-                                            <div style={{ flex: 1 }}>
-                                                <div style={{ fontWeight: 500, color: isLinked ? '#15803d' : '#111827' }}>{a.nomeCompleto}</div>
-                                                <div style={{ fontSize: '12px', color: '#9ca3af', marginTop: '2px' }}>{a.idFuncional} • CPF: {a.cpf}</div>
-                                            </div>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                            <div style={{ marginTop: '16px', padding: '12px 16px', background: '#f9fafb', borderRadius: '10px', fontSize: '13px', color: '#6b7280' }}>
-                                <strong>{alunosMatriculados.length}</strong> aluno(s) matriculado(s) nesta turma
-                            </div>
-                        </div>
+                                        ))}
+                                        {alunosMatriculados.length === 0 && <p style={{ fontSize: '13px', color: '#6b7280', textAlign: 'center', padding: '16px 0' }}>Nenhum aluno matriculado nesta turma.</p>}
+                                    </div>
+                                </div>
+                            ) : (
+                                <div>
+                                    <p style={{ fontSize: '13px', color: '#6b7280', marginBottom: '12px' }}>Selecione os alunos para matricular nesta turma.</p>
+                                    <div style={{ marginBottom: '12px' }}>
+                                        <input type="text" placeholder="Buscar aluno por nome, CPF ou ID... (duplo clique para listar todos)" value={alunoSearch} onChange={(e) => { setAlunoSearch(e.target.value); if (!e.target.value) setShowAllAlunos(false); }} onDoubleClick={() => { setShowAllAlunos(true); setAlunoSearch(''); }} className="form-input" style={{ fontSize: '13px' }} />
+                                    </div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '400px', overflowY: 'auto' }}>
+                                        {filteredAlunos.map(a => {
+                                            const isLinked = isAlunoMatriculado(a.id);
+                                            return (
+                                                <button key={a.id} onClick={() => toggleAluno(a)} style={{
+                                                    width: '100%', textAlign: 'left', padding: '14px 16px', borderRadius: '10px',
+                                                    fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '12px',
+                                                    border: isLinked ? '1.5px solid #16a34a' : '1px solid #e5e7eb',
+                                                    background: isLinked ? '#f0fdf4' : 'white', transition: 'all 0.15s ease',
+                                                }}>
+                                                    <div style={{ width: '20px', height: '20px', borderRadius: '6px', flexShrink: 0, border: isLinked ? '2px solid #16a34a' : '2px solid #d1d5db', background: isLinked ? '#16a34a' : 'white', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                        {isLinked && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>}
+                                                    </div>
+                                                    <div className="avatar-sm" style={{ width: '32px', height: '32px', fontSize: '13px' }}>{a.nomeCompleto?.charAt(0) || 'A'}</div>
+                                                    <div style={{ flex: 1 }}>
+                                                        <div style={{ fontWeight: 500, color: isLinked ? '#15803d' : '#111827' }}>{a.nomeCompleto}</div>
+                                                        <div style={{ fontSize: '12px', color: '#9ca3af', marginTop: '2px' }}>{a.idFuncional} • CPF: {a.cpf}</div>
+                                                    </div>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                    <div onDoubleClick={() => setShowMatriculadosView(true)} style={{ marginTop: '16px', padding: '12px 16px', background: '#f9fafb', borderRadius: '10px', fontSize: '13px', color: '#6b7280', cursor: 'pointer', border: '1px dashed #d1d5db', transition: 'background 0.2s' }} title="Duplo clique para detalhar">
+                                        <strong>{alunosMatriculados.length}</strong> aluno(s) matriculado(s) nesta turma
+                                    </div>
+                                </div>
+                            )}
+                        </>
                     )}
                 </div>
             </Modal>

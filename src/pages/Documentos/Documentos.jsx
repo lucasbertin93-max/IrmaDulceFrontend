@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { documentoService, pessoaService } from '../../services/endpoints';
+import ConfigurarTemplateModal from './ConfigurarTemplateModal';
 
 export default function Documentos() {
     const [busca, setBusca] = useState('');
@@ -7,6 +8,10 @@ export default function Documentos() {
     const [resultados, setResultados] = useState([]);
     const [emitindo, setEmitindo] = useState('');
     const [error, setError] = useState('');
+
+    const [configModalOpen, setConfigModalOpen] = useState(false);
+    const [docToConfig, setDocToConfig] = useState(null);
+    const searchInputRef = useRef(null);
 
     const documentTypes = [
         { id: 'Contrato', label: 'Contrato', description: 'Contrato de matrícula do aluno' },
@@ -27,7 +32,7 @@ export default function Documentos() {
             <div className="card card-padded" style={{ marginBottom: '24px' }}>
                 <label className="form-label">Selecionar Aluno</label>
                 <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
-                    <input type="text" placeholder="Buscar por ID funcional ou nome..." value={busca} onChange={(e) => setBusca(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleBusca()} className="search-input" style={{ flex: 1, paddingLeft: '16px' }} />
+                    <input ref={searchInputRef} type="text" placeholder="Buscar por ID funcional ou nome..." value={busca} onChange={(e) => setBusca(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleBusca()} className="search-input" style={{ flex: 1, paddingLeft: '16px' }} />
                     <button onClick={handleBusca} className="btn-primary">Buscar</button>
                 </div>
                 {resultados.length > 0 && (
@@ -50,16 +55,44 @@ export default function Documentos() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '20px' }}>
                 {documentTypes.map((doc) => (
                     <div key={doc.id} className="card card-padded" style={{ display: 'flex', flexDirection: 'column' }}>
-                        <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#111827' }}>{doc.label}</h3>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#111827' }}>{doc.label}</h3>
+                            <button
+                                onClick={() => { setDocToConfig(doc); setConfigModalOpen(true); }}
+                                title="Configurar Template"
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6b7280', padding: '4px', borderRadius: '4px' }}
+                                onMouseOver={(e) => e.currentTarget.style.background = '#f3f4f6'}
+                                onMouseOut={(e) => e.currentTarget.style.background = 'none'}
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="feather feather-settings"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                            </button>
+                        </div>
                         <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '6px', marginBottom: '20px', flex: 1 }}>{doc.description}</p>
-                        <button onClick={() => handleEmitir(doc.id)} disabled={!alunoSelecionado || emitindo === doc.id}
+                        <button onClick={() => {
+                            if (!alunoSelecionado) {
+                                searchInputRef.current?.focus();
+                                // Optional visual feedback that search is required
+                                searchInputRef.current?.style.setProperty('box-shadow', '0 0 0 2px #3b82f6');
+                                setTimeout(() => searchInputRef.current?.style.removeProperty('box-shadow'), 1000);
+                            } else {
+                                handleEmitir(doc.id);
+                            }
+                        }} disabled={emitindo === doc.id}
                             className={alunoSelecionado ? 'btn-blue' : 'btn-cancel'}
-                            style={{ width: '100%', opacity: !alunoSelecionado ? 0.5 : 1, cursor: !alunoSelecionado ? 'not-allowed' : 'pointer' }}>
-                            {emitindo === doc.id ? 'Gerando...' : 'Emitir PDF'}
+                            style={{ width: '100%', opacity: !alunoSelecionado ? 0.5 : 1, cursor: 'pointer' }}>
+                            {emitindo === doc.id ? 'Gerando...' : 'Emitir Documento'}
                         </button>
                     </div>
                 ))}
             </div>
+
+            {configModalOpen && (
+                <ConfigurarTemplateModal
+                    isOpen={configModalOpen}
+                    documentType={docToConfig}
+                    onClose={() => setConfigModalOpen(false)}
+                />
+            )}
         </div>
     );
 }

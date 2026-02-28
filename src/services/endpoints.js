@@ -106,3 +106,10 @@ export const configuracaoService = {
     get: () => api.get('/configuracoes'),
     atualizar: (data) => api.put('/configuracoes', data),
 };
+
+// ==================== TEMPLATES ====================
+export const templateService = {
+    get: (tipo) => api.get(`/templates/${tipo}`),
+    upload: (data) => api.post('/templates/upload', data, { headers: { 'Content-Type': 'multipart/form-data' } }),
+    saveTags: (data) => api.post('/templates/tags', data)
+};
