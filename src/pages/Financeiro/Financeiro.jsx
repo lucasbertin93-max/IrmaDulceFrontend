@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { financeiroService, pessoaService } from '../../services/endpoints';
+import { financeiroService, pessoaService, configuracaoService } from '../../services/endpoints';
 import * as XLSX from 'xlsx';
 import Modal from '../../components/ui/Modal';
 
@@ -13,8 +13,10 @@ export default function Financeiro() {
     const [mesFiltro, setMesFiltro] = useState('');
     const [buscaAluno, setBuscaAluno] = useState('');
     const [showModal, setShowModal] = useState(false);
-    const [lancForm, setLancForm] = useState({ descricao: '', valor: 0, tipo: 0, data: new Date().toISOString().substring(0, 10) });
+    const [lancForm, setLancForm] = useState({ id: null, descricao: '', valor: 0, tipo: 1, data: new Date().toISOString().substring(0, 10) });
     const [saving, setSaving] = useState(false);
+    const [sysConfig, setSysConfig] = useState(null);
+    const [loadError, setLoadError] = useState(null);
 
     // Dashboard State
     const [mesDashboard, setMesDashboard] = useState(new Date().toISOString().substring(0, 7));
@@ -29,14 +31,22 @@ export default function Financeiro() {
     const [alunoSearch, setAlunoSearch] = useState('');
     const [showAllAlunos, setShowAllAlunos] = useState(false);
     const [selectedAluno, setSelectedAluno] = useState(null);
-    const [boletoForm, setBoletoForm] = useState({ qtdParcelas: 1, valorParcela: 0, primeiroVencimento: new Date().toISOString().substring(0, 10) });
+    const [boletoForm, setBoletoForm] = useState({ qtdParcelas: 1, valorParcela: 0, primeiroVencimento: new Date().toISOString().substring(0, 10), descontoPontualidade: 0, tipoDescontoPontualidade: 'Percentual' });
 
     // Pagamento Modal State
     const [showPagamentoModal, setShowPagamentoModal] = useState(false);
     const [pagamentoSelecionado, setPagamentoSelecionado] = useState(null);
+    const [pagamentoDetalhes, setPagamentoDetalhes] = useState({ diasAtraso: 0, multa: 0, juros: 0, desconto: 0, totalAtualizado: 0, hasAtraso: false });
     const [pagamentoForm, setPagamentoForm] = useState({ valorPago: 0, metodoPagamento: 1, observacao: '', dataPagamento: new Date().toISOString().substring(0, 10) });
 
     useEffect(() => { loadData(); }, [tab, mesDashboard]);
+
+    // Update real-time calculations when payment date changes
+    useEffect(() => {
+        if (showPagamentoModal && pagamentoSelecionado) {
+            recalcularPagamento(pagamentoSelecionado, pagamentoForm.dataPagamento);
+        }
+    }, [pagamentoForm.dataPagamento]);
 
     const loadData = async () => {
         setLoading(true);
@@ -47,31 +57,52 @@ export default function Financeiro() {
             const fim = new Date(parseInt(ano), parseInt(mes), 0, 23, 59, 59).toISOString();
 
             if (tab === 'dashboard') {
-                const [dashRes, menRes] = await Promise.all([
+                const [dashRes, menRes, cfgRes] = await Promise.all([
                     financeiroService.getDashboard(inicio, fim),
-                    financeiroService.getMensalidades({})
+                    financeiroService.getMensalidades({}),
+                    configuracaoService.get().catch(() => ({ data: { multaAtrasoPercent: 2.0, jurosMensalPercent: 1.0 } }))
                 ]);
                 setDashboard(dashRes.data);
                 setMensalidades(Array.isArray(menRes.data) ? menRes.data : []);
+                setSysConfig(cfgRes.data);
             }
             else if (tab === 'mensalidades') {
-                const res = await financeiroService.getMensalidades({});
-                setMensalidades(Array.isArray(res.data) ? res.data : []);
+                const [menRes, cfgRes] = await Promise.all([
+                    financeiroService.getMensalidades({}),
+                    configuracaoService.get().catch(() => ({ data: { multaAtrasoPercent: 2.0, jurosMensalPercent: 1.0 } }))
+                ]);
+                setMensalidades(Array.isArray(menRes.data) ? menRes.data : []);
+                setSysConfig(cfgRes.data);
             }
             else {
                 const res = await financeiroService.getLancamentos(inicio, fim);
                 setLancamentos(Array.isArray(res.data) ? res.data : []);
             }
-        } catch (e) { console.error(e); } finally { setLoading(false); }
+        } catch (e) {
+            console.error(e);
+            setLoadError(`Erro na API: ${e.message} | ${JSON.stringify(e.response?.data || e)}`);
+        } finally { setLoading(false); }
     };
 
-    const handleAddLancamento = async () => { setSaving(true); try { await financeiroService.adicionarLancamento(lancForm); setShowModal(false); loadData(); } catch (err) { alert(err.response?.data?.message || 'Erro.'); } finally { setSaving(false); } };
+    const handleAddLancamento = async () => {
+        setSaving(true);
+        try {
+            if (lancForm.id) {
+                await financeiroService.atualizarLancamento(lancForm.id, lancForm);
+            } else {
+                await financeiroService.adicionarLancamento(lancForm);
+            }
+            setShowModal(false);
+            loadData();
+        } catch (err) { alert(err.response?.data?.message || 'Erro.'); }
+        finally { setSaving(false); }
+    };
 
     const openBoletoModal = async () => {
         setSelectedAluno(null);
         setAlunoSearch('');
         setShowAllAlunos(false);
-        setBoletoForm({ qtdParcelas: 1, valorParcela: 0, primeiroVencimento: new Date().toISOString().substring(0, 10) });
+        setBoletoForm({ qtdParcelas: 1, valorParcela: 0, primeiroVencimento: new Date().toISOString().substring(0, 10), descontoPontualidade: 0, tipoDescontoPontualidade: 'Percentual' });
         setShowBoletoModal(true);
         if (alunos.length === 0) {
             setAlunosLoading(true);
@@ -80,20 +111,113 @@ export default function Financeiro() {
         }
     };
 
+    const handleSelectAluno = (a) => {
+        setSelectedAluno(a);
+
+        // Auto-fill defaults from Registration config
+        const qtde = a.quantidadeParcelas || 1;
+        let vcto = new Date().toISOString().substring(0, 10);
+
+        if (a.diaVencimento) {
+            let now = new Date();
+            let y = now.getFullYear();
+            let m = now.getMonth() + 1; // 1 to 12
+
+            // If today is past the dueDate, set it to next month
+            if (now.getDate() > a.diaVencimento) {
+                m += 1;
+                if (m > 12) {
+                    m = 1;
+                    y += 1;
+                }
+            }
+
+            // Limit day to the month's maximum days
+            const maxDays = new Date(y, m, 0).getDate();
+            const safeDay = Math.min(a.diaVencimento, maxDays);
+
+            vcto = `${y}-${m.toString().padStart(2, '0')}-${safeDay.toString().padStart(2, '0')}`;
+        }
+
+        setBoletoForm(curr => ({ ...curr, qtdParcelas: qtde, primeiroVencimento: vcto }));
+    };
+
     const handleGerarBoleto = async () => {
         if (!selectedAluno) return alert('Selecione um aluno.');
         if (boletoForm.qtdParcelas < 1 || boletoForm.valorParcela <= 0) return alert('Valores inválidos.');
         setSaving(true);
         try {
-            await financeiroService.gerarBoletosAluno({ alunoId: selectedAluno.id, qtdParcelas: parseInt(boletoForm.qtdParcelas), valorParcela: parseFloat(boletoForm.valorParcela), primeiroVencimento: boletoForm.primeiroVencimento });
+            const payload = {
+                alunoId: selectedAluno.id,
+                qtdParcelas: parseInt(boletoForm.qtdParcelas),
+                valorParcela: parseFloat(boletoForm.valorParcela),
+                primeiroVencimento: boletoForm.primeiroVencimento
+            };
+            if (parseFloat(boletoForm.descontoPontualidade) > 0) {
+                payload.descontoPontualidade = parseFloat(boletoForm.descontoPontualidade);
+                // tipoDescontoPontualidade already stored as 'Percentual' or 'ValorFixo' string
+                payload.tipoDescontoPontualidade = boletoForm.tipoDescontoPontualidade;
+            }
+            await financeiroService.gerarBoletosAluno(payload);
             setShowBoletoModal(false); loadData();
         } catch (err) { alert(err.response?.data?.message || 'Erro ao gerar boletos.'); } finally { setSaving(false); }
     };
 
     const openPagamentoModal = (mensalidade) => {
+        const hojeIso = new Date().toISOString().substring(0, 10);
         setPagamentoSelecionado(mensalidade);
-        setPagamentoForm({ valorPago: mensalidade.valor, metodoPagamento: 1, observacao: '', dataPagamento: new Date().toISOString().substring(0, 10) });
+        setPagamentoForm({ valorPago: 0, metodoPagamento: 1, observacao: '', dataPagamento: hojeIso });
+        recalcularPagamento(mensalidade, hojeIso, true);
         setShowPagamentoModal(true);
+    };
+
+    const recalcularPagamento = (mensalidade, dataPag, resetValorPago = false) => {
+        let diasAtraso = 0;
+        let multa = 0;
+        let juros = 0;
+        let desconto = 0;
+        let hasAtraso = false;
+
+        // Use the selected payment date to calculate delay and discounts
+        const pagDate = new Date(`${dataPag}T00:00:00`);
+        const vcto = new Date(`${mensalidade.dataVencimento.substring(0, 10)}T00:00:00`);
+
+        if (pagDate > vcto) {
+            // Atrasado: Sem desconto, cobrar multa e juros
+            diasAtraso = Math.floor((pagDate - vcto) / (1000 * 60 * 60 * 24));
+            if (diasAtraso > 0) {
+                hasAtraso = true;
+                const multaPct = sysConfig?.multaAtrasoPercent ?? 2.0;
+                const jurosPct = sysConfig?.jurosMensalPercent ?? 1.0;
+
+                multa = mensalidade.valor * (multaPct / 100);
+                juros = (mensalidade.valor * (jurosPct / 100) / 30) * diasAtraso;
+            }
+        } else {
+            // Em dia ou adiantado: Aplicar desconto se existir
+            if (mensalidade.descontoPontualidade) {
+                const isPercent = mensalidade.tipoDescontoPontualidade === 'Percentual' || mensalidade.tipoDescontoPontualidade === 1;
+                if (isPercent) {
+                    desconto = mensalidade.valor * (mensalidade.descontoPontualidade / 100);
+                } else {
+                    // ValorFixo
+                    desconto = mensalidade.descontoPontualidade;
+                }
+            }
+        }
+
+        const totalAtualizado = mensalidade.valor + multa + juros - desconto;
+
+        setPagamentoDetalhes({ diasAtraso, multa, juros, desconto, totalAtualizado, hasAtraso });
+        if (resetValorPago) {
+            setPagamentoForm(prev => ({ ...prev, valorPago: parseFloat(totalAtualizado.toFixed(2)) }));
+        }
+    };
+
+    const handleDataPagamentoChange = (e) => {
+        const newDate = e.target.value;
+        setPagamentoForm({ ...pagamentoForm, dataPagamento: newDate });
+        // The useEffect will trigger the recalculation
     };
 
     const handleRegistrarPagamento = async () => {
@@ -148,7 +272,7 @@ export default function Financeiro() {
 
     const exportPDF = () => { window.print(); };
 
-    const fmt = (v) => `R$ ${(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+    const fmt = (v) => `R$ ${(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     const fmtData = (d) => {
         if (!d) return '';
         const dt = new Date(d);
@@ -157,8 +281,17 @@ export default function Financeiro() {
         return dt.toLocaleDateString('pt-BR', { timeZone: 'UTC' });
     };
 
-    const statusLabels = { 1: 'Pago', 2: 'Pendente', 3: 'Atrasado', 4: 'Cancelado' };
-    const statusColors = { 2: { bg: '#fffbeb', color: '#b45309' }, 1: { bg: '#f0fdf4', color: '#166534' }, 3: { bg: '#fef2f2', color: '#b91c1c' }, 4: { bg: '#f3f4f6', color: '#6b7280' } };
+    const statusLabels = { 'Pago': 'Pago', 'EmAberto': 'Pendente', 'Atrasado': 'Atrasado', 'Cancelado': 'Cancelado', 1: 'Pago', 2: 'Pendente', 3: 'Atrasado', 4: 'Cancelado' };
+    const statusColors = {
+        'EmAberto': { bg: '#fffbeb', color: '#b45309' },
+        'Pago': { bg: '#f0fdf4', color: '#166534' },
+        'Atrasado': { bg: '#fef2f2', color: '#b91c1c' },
+        'Cancelado': { bg: '#f3f4f6', color: '#6b7280' },
+        2: { bg: '#fffbeb', color: '#b45309' },
+        1: { bg: '#f0fdf4', color: '#166534' },
+        3: { bg: '#fef2f2', color: '#b91c1c' },
+        4: { bg: '#f3f4f6', color: '#6b7280' }
+    };
 
     const getMensalidadesAgrupadas = () => {
         const filtradas = mensalidades.filter(m => {
@@ -195,13 +328,13 @@ export default function Financeiro() {
 
         mensalidades.forEach(m => {
             emitidasGeral.count++; emitidasGeral.sum += m.valor; emitidasGeral.list.push(m);
-            if (m.status === 3) { atrasadasGeral.count++; atrasadasGeral.sum += m.valor; atrasadasGeral.list.push(m); }
-            if (m.status === 1) { pagasGeral.count++; pagasGeral.sum += m.valor; pagasGeral.list.push(m); }
+            if (m.status === 'Atrasado' || m.status === 3) { atrasadasGeral.count++; atrasadasGeral.sum += m.valor; atrasadasGeral.list.push(m); }
+            if (m.status === 'Pago' || m.status === 1) { pagasGeral.count++; pagasGeral.sum += m.valor; pagasGeral.list.push(m); }
 
             if (anoD && mesD && m.anoReferencia === parseInt(anoD) && m.mesReferencia === parseInt(mesD)) {
                 emitidasMes.count++; emitidasMes.sum += m.valor; emitidasMes.list.push(m);
-                if (m.status === 3) { atrasadasMes.count++; atrasadasMes.sum += m.valor; atrasadasMes.list.push(m); }
-                if (m.status === 1) { pagasMes.count++; pagasMes.sum += m.valor; pagasMes.list.push(m); }
+                if (m.status === 'Atrasado' || m.status === 3) { atrasadasMes.count++; atrasadasMes.sum += m.valor; atrasadasMes.list.push(m); }
+                if (m.status === 'Pago' || m.status === 1) { pagasMes.count++; pagasMes.sum += m.valor; pagasMes.list.push(m); }
             }
         });
         return { emitidasMes, emitidasGeral, atrasadasMes, atrasadasGeral, pagasMes, pagasGeral };
@@ -227,6 +360,12 @@ export default function Financeiro() {
                     <button onClick={() => setTab('lancamentos')} className={`tab-btn${tab === 'lancamentos' ? ' active' : ''}`}>Entradas / Saídas</button>
                 </div>
             </div>
+
+            {loadError && (
+                <div style={{ padding: '16px', background: '#fee2e2', border: '1px solid #ef4444', color: '#b91c1c', borderRadius: '8px', marginBottom: '20px' }}>
+                    <strong>Foram detectados erros ao carregar:</strong> {loadError}
+                </div>
+            )}
 
             {loading && <p style={{ color: '#9ca3af', fontSize: '14px' }}>Carregando...</p>}
 
@@ -297,7 +436,7 @@ export default function Financeiro() {
                     <div className="card">
                         <div style={{ padding: '20px 24px', display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
                             <input type="month" value={mesFiltro} onChange={(e) => setMesFiltro(e.target.value)} className="form-input" style={{ width: '160px' }} />
-                            <select value={statusFiltro} onChange={(e) => setStatusFiltro(e.target.value)} className="form-select" style={{ width: '160px' }}><option value="">Todos Status</option><option value="2">Pendente</option><option value="1">Pago</option><option value="3">Atrasado</option></select>
+                            <select value={statusFiltro} onChange={(e) => setStatusFiltro(e.target.value)} className="form-select" style={{ width: '160px' }}><option value="">Todos Status</option><option value="EmAberto">Pendente</option><option value="Pago">Pago</option><option value="Atrasado">Atrasado</option></select>
                             <input type="text" placeholder="Buscar aluno ou responsável..." value={buscaAluno} onChange={(e) => setBuscaAluno(e.target.value)} className="search-input" style={{ paddingLeft: '16px', flex: 1 }} />
                             <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px' }}>
                                 <button onClick={exportExcel} className="btn-secondary" style={{ padding: '6px 12px', fontSize: '13px' }}>📊 Exportar Excel</button>
@@ -336,7 +475,7 @@ export default function Financeiro() {
                                                             <td style={{ borderBottom: '1px solid #f3f4f6' }}>{fmtData(m.dataVencimento)}</td>
                                                             <td style={{ borderBottom: '1px solid #f3f4f6' }}><span className="badge" style={{ background: statusColors[m.status]?.bg, color: statusColors[m.status]?.color }}>{statusLabels[m.status]}</span></td>
                                                             <td style={{ textAlign: 'right', borderBottom: '1px solid #f3f4f6' }}>
-                                                                {(m.status === 2 || m.status === 3) && (
+                                                                {(m.status === 'EmAberto' || m.status === 'Atrasado' || m.status === 2 || m.status === 3) && (
                                                                     <button onClick={() => openPagamentoModal(m)} className="row-action-btn" style={{ color: '#16a34a', borderColor: '#bbf7d0', background: '#f0fdf4' }}>💸 Receber</button>
                                                                 )}
                                                             </td>
@@ -356,17 +495,20 @@ export default function Financeiro() {
             {tab === 'lancamentos' && (
                 <div>
                     <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
-                        <button onClick={() => { setLancForm({ descricao: '', valor: 0, tipo: 0, data: new Date().toISOString().substring(0, 10) }); setShowModal(true); }} className="btn-primary">+ Novo Lançamento</button>
+                        <button onClick={() => { setLancForm({ id: null, descricao: '', valor: 0, tipo: 1, data: new Date().toISOString().substring(0, 10) }); setShowModal(true); }} className="btn-primary">+ Novo Lançamento</button>
                     </div>
                     <div className="card">
                         {lancamentos.length === 0 ? <div className="empty-state">Nenhum lançamento.</div> : (
                             <table className="data-table">
-                                <thead><tr><th>Descrição</th><th>Data</th><th style={{ textAlign: 'right' }}>Valor</th></tr></thead>
+                                <thead><tr><th>Descrição</th><th>Data</th><th style={{ textAlign: 'right' }}>Valor</th><th style={{ textAlign: 'right' }}>Ações</th></tr></thead>
                                 <tbody>{lancamentos.map(l => (
                                     <tr key={l.id}>
                                         <td style={{ fontWeight: 500 }}>{l.descricao}</td>
                                         <td>{fmtData(l.data)}</td>
-                                        <td style={{ textAlign: 'right', fontWeight: 600, color: l.tipo === 0 ? '#16a34a' : '#dc2626' }}>{l.tipo === 0 ? '+' : '-'} {fmt(l.valor)}</td>
+                                        <td style={{ textAlign: 'right', fontWeight: 600, color: (l.tipo === 'Entrada' || l.tipo === 1) ? '#16a34a' : '#dc2626' }}>{(l.tipo === 'Entrada' || l.tipo === 1) ? '+' : '-'} {fmt(l.valor)}</td>
+                                        <td style={{ textAlign: 'right' }}>
+                                            <button onClick={() => { setLancForm({ id: l.id, descricao: l.descricao, valor: l.valor, tipo: l.tipo, data: l.data.substring(0, 10) }); setShowModal(true); }} className="row-action-btn" style={{ color: '#3b82f6', borderColor: '#bfdbfe', background: '#eff6ff' }}>✏️ Editar</button>
+                                        </td>
                                     </tr>
                                 ))}</tbody>
                             </table>
@@ -375,13 +517,13 @@ export default function Financeiro() {
                 </div>
             )}
 
-            <Modal open={showModal} onClose={() => setShowModal(false)} title="Novo Lançamento" maxWidth="560px"
+            <Modal open={showModal} onClose={() => setShowModal(false)} title={lancForm.id ? "Editar Lançamento" : "Novo Lançamento"} maxWidth="560px"
                 footer={<><button onClick={() => setShowModal(false)} className="btn-cancel">Cancelar</button><button onClick={handleAddLancamento} disabled={saving} className="btn-blue">{saving ? 'Salvando...' : 'Salvar'}</button></>}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                     <div><label className="form-label">Descrição</label><input type="text" value={lancForm.descricao} onChange={(e) => setLancForm({ ...lancForm, descricao: e.target.value })} className="form-input" placeholder="Ex: Pagamento Fornecedor" /></div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                         <div><label className="form-label">Valor</label><input type="number" step="0.01" value={lancForm.valor} onChange={(e) => setLancForm({ ...lancForm, valor: parseFloat(e.target.value) || 0 })} className="form-input" /></div>
-                        <div><label className="form-label">Tipo</label><select value={lancForm.tipo} onChange={(e) => setLancForm({ ...lancForm, tipo: parseInt(e.target.value) })} className="form-select"><option value={0}>Entrada</option><option value={1}>Saída</option></select></div>
+                        <div><label className="form-label">Tipo</label><select value={lancForm.tipo} onChange={(e) => setLancForm({ ...lancForm, tipo: e.target.value })} className="form-select"><option value="Entrada">Entrada</option><option value="Saida">Saída</option></select></div>
                     </div>
                     <div><label className="form-label">Data</label><input type="date" value={lancForm.data} onChange={(e) => setLancForm({ ...lancForm, data: e.target.value })} className="form-input" /></div>
                 </div>
@@ -397,7 +539,7 @@ export default function Financeiro() {
                             <div style={{ maxHeight: '200px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '4px' }}>
                                 {alunosLoading ? <div style={{ padding: '12px', textAlign: 'center', color: '#6b7280', fontSize: '13px' }}>Carregando alunos...</div> :
                                     (alunoSearch || showAllAlunos) ? alunos.filter(a => !alunoSearch || a.nomeCompleto?.toLowerCase().includes(alunoSearch.toLowerCase()) || a.cpf?.includes(alunoSearch) || a.idFuncional?.toLowerCase().includes(alunoSearch.toLowerCase())).sort((a, b) => (a.nomeCompleto || '').localeCompare(b.nomeCompleto || '')).map(a => (
-                                        <button key={a.id} onClick={() => setSelectedAluno(a)} style={{ padding: '8px 12px', textAlign: 'left', borderRadius: '6px', background: 'white', border: '1px solid transparent', cursor: 'pointer', fontSize: '13px', display: 'flex', justifyContent: 'space-between', transition: 'all 0.1s' }}>
+                                        <button key={a.id} onClick={() => handleSelectAluno(a)} style={{ padding: '8px 12px', textAlign: 'left', borderRadius: '6px', background: 'white', border: '1px solid transparent', cursor: 'pointer', fontSize: '13px', display: 'flex', justifyContent: 'space-between', transition: 'all 0.1s' }}>
                                             <span style={{ fontWeight: 500, color: '#111827' }}>{a.nomeCompleto}</span><span style={{ color: '#6b7280' }}>{a.idFuncional}</span>
                                         </button>
                                     )) : <div style={{ padding: '12px', textAlign: 'center', color: '#9ca3af', fontSize: '13px' }}>Digite para buscar ou dê um duplo clique para listar todos.</div>}
@@ -414,9 +556,56 @@ export default function Financeiro() {
                     )}
                     {selectedAluno && (
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                            <div><label className="form-label">Qtd. de Parcelas</label><input type="number" min="1" value={boletoForm.qtdParcelas} onChange={(e) => setBoletoForm({ ...boletoForm, qtdParcelas: e.target.value })} className="form-input" /></div>
-                            <div><label className="form-label">Valor da Parcela (R$)</label><input type="number" step="0.01" min="0" value={boletoForm.valorParcela} onChange={(e) => setBoletoForm({ ...boletoForm, valorParcela: e.target.value })} className="form-input" /></div>
-                            <div style={{ gridColumn: 'span 2' }}><label className="form-label">1º Vencimento</label><input type="date" value={boletoForm.primeiroVencimento} onChange={(e) => setBoletoForm({ ...boletoForm, primeiroVencimento: e.target.value })} className="form-input" /></div>
+                            <div><label className="form-label">Qtd. de Parcelas</label><input type="number" min="1" value={boletoForm.qtdParcelas} onChange={(e) => setBoletoForm(curr => ({ ...curr, qtdParcelas: e.target.value }))} className="form-input" /></div>
+                            <div><label className="form-label">Valor da Parcela (R$)</label><input type="number" step="0.01" min="0" value={boletoForm.valorParcela} onChange={(e) => setBoletoForm(curr => ({ ...curr, valorParcela: e.target.value }))} className="form-input" /></div>
+                            <div style={{ gridColumn: 'span 2' }}><label className="form-label">1º Vencimento</label><input type="date" value={boletoForm.primeiroVencimento} onChange={(e) => setBoletoForm(curr => ({ ...curr, primeiroVencimento: e.target.value }))} className="form-input" /></div>
+
+                            <div style={{ gridColumn: 'span 2', marginTop: '8px', paddingTop: '16px', borderTop: '1px solid #e5e7eb' }}>
+                                <h4 style={{ fontSize: '14px', fontWeight: 600, color: '#374151', marginBottom: '12px' }}>Desconto de Pontualidade (Opcional)</h4>
+                                <label className="form-label">Tipo de Desconto</label>
+                                <div style={{ display: 'flex', gap: '0', marginBottom: '16px', border: '1px solid #d1d5db', borderRadius: '8px', overflow: 'hidden' }}>
+                                    <button
+                                        type="button"
+                                        onClick={() => setBoletoForm(curr => ({ ...curr, tipoDescontoPontualidade: 'Percentual' }))}
+                                        style={{
+                                            flex: 1, padding: '10px 16px', border: 'none', cursor: 'pointer',
+                                            fontSize: '13px', fontWeight: 600, transition: 'all 0.15s',
+                                            background: boletoForm.tipoDescontoPontualidade === 'Percentual' ? '#2563eb' : '#f9fafb',
+                                            color: boletoForm.tipoDescontoPontualidade === 'Percentual' ? '#fff' : '#374151',
+                                        }}
+                                    >
+                                        📊 Porcentagem (%)
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setBoletoForm(curr => ({ ...curr, tipoDescontoPontualidade: 'ValorFixo' }))}
+                                        style={{
+                                            flex: 1, padding: '10px 16px', border: 'none', borderLeft: '1px solid #d1d5db', cursor: 'pointer',
+                                            fontSize: '13px', fontWeight: 600, transition: 'all 0.15s',
+                                            background: boletoForm.tipoDescontoPontualidade === 'ValorFixo' ? '#2563eb' : '#f9fafb',
+                                            color: boletoForm.tipoDescontoPontualidade === 'ValorFixo' ? '#fff' : '#374151',
+                                        }}
+                                    >
+                                        💰 Valor Fixo (R$)
+                                    </button>
+                                </div>
+                                <div>
+                                    <label className="form-label">
+                                        {boletoForm.tipoDescontoPontualidade === 'Percentual' ? 'Porcentagem de Desconto (%)' : 'Valor Fixo do Desconto (R$)'}
+                                    </label>
+                                    <input
+                                        type="number" step="0.01" min="0"
+                                        value={boletoForm.descontoPontualidade}
+                                        onChange={(e) => setBoletoForm(curr => ({ ...curr, descontoPontualidade: e.target.value }))}
+                                        className="form-input"
+                                        placeholder={boletoForm.tipoDescontoPontualidade === 'Percentual' ? 'Ex: 10' : 'Ex: 50.00'}
+                                    />
+                                </div>
+                                <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '8px' }}>
+                                    Tipo selecionado: <strong style={{ color: '#2563eb' }}>{boletoForm.tipoDescontoPontualidade === 'Percentual' ? 'Porcentagem' : 'Valor Fixo'}</strong>
+                                    {' '} — O desconto será aplicado se pago até o dia do vencimento.
+                                </p>
+                            </div>
                         </div>
                     )}
                 </div>
@@ -429,11 +618,44 @@ export default function Financeiro() {
                         <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
                             <div style={{ fontSize: '13px', color: '#64748b' }}>Aluno: <strong style={{ color: '#334155' }}>{pagamentoSelecionado.alunoNome || pagamentoSelecionado.alunoId}</strong></div>
                             <div style={{ fontSize: '13px', color: '#64748b', marginTop: '4px' }}>Mês/Ano: <strong style={{ color: '#334155' }}>{pagamentoSelecionado.mesReferencia}/{pagamentoSelecionado.anoReferencia}</strong></div>
-                            <div style={{ fontSize: '18px', color: '#0f172a', fontWeight: 700, marginTop: '12px' }}>{fmt(pagamentoSelecionado.valor)}</div>
+
+                            {pagamentoDetalhes.hasAtraso ? (
+                                <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px dashed #cbd5e1' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#64748b', marginBottom: '4px' }}>
+                                        <span>Valor Original:</span> <span>{fmt(pagamentoSelecionado.valor)}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#b91c1c', marginBottom: '4px' }}>
+                                        <span>Multa por Atraso ({sysConfig?.multaAtrasoPercent ?? 2}%):</span> <span>+ {fmt(pagamentoDetalhes.multa)}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#b91c1c', marginBottom: '4px' }}>
+                                        <span>Juros ({pagamentoDetalhes.diasAtraso} dias - {sysConfig?.jurosMensalPercent ?? 1}% ao mês):</span> <span>+ {fmt(pagamentoDetalhes.juros)}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '16px', color: '#0f172a', fontWeight: 700, marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #e2e8f0' }}>
+                                        <span>Total Atualizado:</span> <span>{fmt(pagamentoDetalhes.totalAtualizado)}</span>
+                                    </div>
+                                </div>
+                            ) : pagamentoDetalhes.desconto > 0 ? (
+                                <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px dashed #cbd5e1' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#64748b', marginBottom: '4px' }}>
+                                        <span>Valor Original:</span> <span>{fmt(pagamentoSelecionado.valor)}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#16a34a', marginBottom: '4px' }}>
+                                        <span>Desconto (Pontualidade):</span> <span>- {fmt(pagamentoDetalhes.desconto)}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '16px', color: '#0f172a', fontWeight: 700, marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #e2e8f0' }}>
+                                        <span>Total Atualizado:</span> <span>{fmt(pagamentoDetalhes.totalAtualizado)}</span>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div style={{ fontSize: '18px', color: '#0f172a', fontWeight: 700, marginTop: '12px' }}>{fmt(pagamentoSelecionado.valor)}</div>
+                            )}
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                             <div><label className="form-label">Valor Pago (R$)</label><input type="number" step="0.01" value={pagamentoForm.valorPago} onChange={(e) => setPagamentoForm({ ...pagamentoForm, valorPago: e.target.value })} className="form-input" /></div>
-                            <div><label className="form-label">Data Pagamento</label><input type="date" value={pagamentoForm.dataPagamento} onChange={(e) => setPagamentoForm({ ...pagamentoForm, dataPagamento: e.target.value })} className="form-input" /></div>
+                            <div>
+                                <label className="form-label">Data Pagamento</label>
+                                <input type="date" value={pagamentoForm.dataPagamento} onChange={handleDataPagamentoChange} className="form-input" />
+                            </div>
                             <div style={{ gridColumn: 'span 2' }}>
                                 <label className="form-label">Método de Pagamento</label>
                                 <select value={pagamentoForm.metodoPagamento} onChange={(e) => setPagamentoForm({ ...pagamentoForm, metodoPagamento: e.target.value })} className="form-select">

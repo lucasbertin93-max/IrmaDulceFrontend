@@ -84,6 +84,7 @@ export const financeiroService = {
     deletarMensalidade: (id) => api.delete(`/financeiro/mensalidades/${id}`),
     getLancamentos: (inicio, fim, tipo) => api.get('/financeiro/lancamentos', { params: { inicio, fim, tipo } }),
     adicionarLancamento: (data) => api.post('/financeiro/lancamentos', data),
+    atualizarLancamento: (id, data) => api.put(`/financeiro/lancamentos/${id}`, data),
 };
 
 // ==================== DOCUMENTOS ====================

@@ -70,14 +70,14 @@ export default function Turmas() {
         finally { setAlunosLoading(false); }
     };
 
-    const isAlunoMatriculado = (alunoId) => matriculas.some(m => m.alunoId === alunoId && m.status === 1);
+    const isAlunoMatriculado = (alunoId) => matriculas.some(m => m.alunoId === alunoId && (m.status === 'Ativo' || m.status === 1));
 
     const toggleAluno = async (aluno) => {
         const isEnrolled = isAlunoMatriculado(aluno.id);
         try {
             if (isEnrolled) {
                 await turmaService.cancelarMatricula(selectedTurma.id, aluno.id);
-                setMatriculas(prev => prev.filter(m => !(m.alunoId === aluno.id && m.status === 1)));
+                setMatriculas(prev => prev.filter(m => !(m.alunoId === aluno.id && (m.status === 'Ativo' || m.status === 1))));
             } else {
                 await turmaService.matricular(selectedTurma.id, { alunoId: aluno.id, turmaId: selectedTurma.id });
                 const res = await turmaService.getMatriculas(selectedTurma.id);
@@ -92,7 +92,7 @@ export default function Turmas() {
             a.cpf?.includes(alunoSearch) || a.idFuncional?.toLowerCase().includes(alunoSearch.toLowerCase())
         ).sort((a, b) => (a.nomeCompleto || '').localeCompare(b.nomeCompleto || ''))
         : [];
-    const alunosMatriculados = matriculas.filter(m => m.status === 1);
+    const alunosMatriculados = matriculas.filter(m => m.status === 'Ativo' || m.status === 1);
 
     // Discipline-Docente linking
     const openDiscModal = async (turma) => {

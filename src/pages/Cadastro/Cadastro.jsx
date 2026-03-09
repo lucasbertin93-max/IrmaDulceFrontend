@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { pessoaService } from '../../services/endpoints';
+import { pessoaService, configuracaoService } from '../../services/endpoints';
 import Modal from '../../components/ui/Modal';
 
 export default function Cadastro() {
@@ -13,7 +13,7 @@ export default function Cadastro() {
         nomeCompleto: '', cpf: '', rg: '', dataNascimento: '', perfil: 4,
         sexo: 1, estadoCivil: 1, naturalidade: '', nacionalidade: 'Brasileira', telefone: '', email: '',
         logradouro: '', numero: '', cep: '', bairro: '', cidade: '',
-        pontoReferencia: '', nomePai: '', nomeMae: '',
+        pontoReferencia: '', nomePai: '', nomeMae: '', diaVencimento: '', quantidadeParcelas: '',
         nomeResponsavel: '', cpfResponsavel: '', rgResponsavel: '', dataNascimentoResponsavel: '', sexoResponsavel: 1, estadoCivilResponsavel: 1,
         naturalidadeResponsavel: '', nacionalidadeResponsavel: 'Brasileira', telefoneResponsavel: '', emailResponsavel: '',
         logradouroResponsavel: '', numeroResponsavel: '', cepResponsavel: '', bairroResponsavel: '', cidadeResponsavel: '',
@@ -22,10 +22,23 @@ export default function Cadastro() {
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
     const [alunoIsResponsavel, setAlunoIsResponsavel] = useState(false);
+    const [prazoMaximoParcelamento, setPrazoMaximoParcelamento] = useState(26);
 
     const estadosCivis = ['Solteiro(a)', 'Casado(a)', 'Divorciado(a)', 'Viúvo(a)', 'União Estável'];
 
     useEffect(() => { loadPessoas(); }, [perfilFiltro]);
+
+    useEffect(() => {
+        const loadConfig = async () => {
+            try {
+                const res = await configuracaoService.get();
+                if (res.data?.prazoMaximoParcelamento) {
+                    setPrazoMaximoParcelamento(res.data.prazoMaximoParcelamento);
+                }
+            } catch (e) { console.error("Could not load config", e); }
+        };
+        loadConfig();
+    }, []);
 
     const loadPessoas = async () => {
         setLoading(true);
@@ -43,7 +56,7 @@ export default function Cadastro() {
             nomeCompleto: '', cpf: '', rg: '', dataNascimento: '', perfil: 4,
             sexo: 1, estadoCivil: 1, naturalidade: '', nacionalidade: 'Brasileira', telefone: '', email: '',
             logradouro: '', numero: '', cep: '', bairro: '', cidade: '',
-            pontoReferencia: '', nomePai: '', nomeMae: '',
+            pontoReferencia: '', nomePai: '', nomeMae: '', diaVencimento: '', quantidadeParcelas: '',
             nomeResponsavel: '', cpfResponsavel: '', rgResponsavel: '', dataNascimentoResponsavel: '', sexoResponsavel: 1, estadoCivilResponsavel: 1,
             naturalidadeResponsavel: '', nacionalidadeResponsavel: 'Brasileira', telefoneResponsavel: '', emailResponsavel: '',
             logradouroResponsavel: '', numeroResponsavel: '', cepResponsavel: '', bairroResponsavel: '', cidadeResponsavel: '',
@@ -61,7 +74,7 @@ export default function Cadastro() {
             dataNascimento: p.dataNascimento?.substring(0, 10) || '', perfil: p.perfil ?? 4,
             sexo: p.sexo ?? 1, estadoCivil: p.estadoCivil ?? 1, naturalidade: p.naturalidade || '', nacionalidade: p.nacionalidade || 'Brasileira', telefone: p.telefone || '', email: p.email || '',
             logradouro: p.logradouro || '', numero: p.numero || '', cep: p.cep || '', bairro: p.bairro || '', cidade: p.cidade || '',
-            pontoReferencia: p.pontoReferencia || '', nomePai: p.nomePai || '', nomeMae: p.nomeMae || '',
+            pontoReferencia: p.pontoReferencia || '', nomePai: p.nomePai || '', nomeMae: p.nomeMae || '', diaVencimento: p.diaVencimento || '', quantidadeParcelas: p.quantidadeParcelas || '',
             nomeResponsavel: '', cpfResponsavel: '', rgResponsavel: '', dataNascimentoResponsavel: '', sexoResponsavel: 1, estadoCivilResponsavel: 1,
             naturalidadeResponsavel: '', nacionalidadeResponsavel: 'Brasileira', telefoneResponsavel: '', emailResponsavel: '',
             logradouroResponsavel: '', numeroResponsavel: '', cepResponsavel: '', bairroResponsavel: '', cidadeResponsavel: '',
@@ -96,6 +109,8 @@ export default function Cadastro() {
                 nomePai: form.nomePai,
                 nomeMae: form.nomeMae,
                 perfil: parseInt(form.perfil) || 4,
+                diaVencimento: form.diaVencimento ? parseInt(form.diaVencimento) : null,
+                quantidadeParcelas: form.quantidadeParcelas ? parseInt(form.quantidadeParcelas) : null,
                 responsavelFinanceiroId: null,
                 responsavelFinanceiro: (alunoIsResponsavel || !!editingId) ? null : {
                     nomeCompleto: form.nomeResponsavel,
@@ -115,7 +130,8 @@ export default function Cadastro() {
                     cidade: form.cidadeResponsavel,
                     nomePai: form.nomePaiResponsavel,
                     nomeMae: form.nomeMaeResponsavel,
-                    perfil: 4
+                    perfil: 4,
+                    diaVencimento: null
                 },
             };
 
@@ -220,6 +236,7 @@ export default function Cadastro() {
                     {/* Dados Pessoais */}
                     <h4 style={{ fontSize: '14px', fontWeight: 600, color: '#111827', marginBottom: '-12px' }}>Dados Pessoais</h4>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                        <div style={{ gridColumn: 'span 2' }}><label className="form-label">Perfil *</label><select value={form.perfil} onChange={(e) => setForm({ ...form, perfil: parseInt(e.target.value) })} className="form-select" disabled={!!editingId}><option value={4}>Aluno</option><option value={3}>Docente</option><option value={2}>Administrativo</option></select></div>
                         <div style={{ gridColumn: 'span 2' }}>
                             <label className="form-label">Nome Completo *</label>
                             <input type="text" value={form.nomeCompleto} onChange={(e) => setForm({ ...form, nomeCompleto: e.target.value })} className="form-input" placeholder="Ex: Maria da Silva" />
@@ -239,7 +256,6 @@ export default function Cadastro() {
                             setForm({ ...form, email: e.target.value });
                             if (alunoIsResponsavel) setForm(curr => ({ ...curr, emailResponsavel: e.target.value }));
                         }} className="form-input" placeholder="email@exemplo.com" /></div>
-                        <div><label className="form-label">Perfil *</label><select value={form.perfil} onChange={(e) => setForm({ ...form, perfil: parseInt(e.target.value) })} className="form-select" disabled={!!editingId}><option value={4}>Aluno</option><option value={3}>Docente</option><option value={2}>Administrativo</option></select></div>
                     </div>
 
                     {/* Filiação */}
@@ -336,6 +352,40 @@ export default function Cadastro() {
                                 <div><label className="form-label">CEP</label><input type="text" value={form.cepResponsavel} onChange={(e) => setForm({ ...form, cepResponsavel: e.target.value })} disabled={alunoIsResponsavel} className={`form-input ${alunoIsResponsavel ? 'disabled' : ''}`} /></div>
                                 <div><label className="form-label">Bairro</label><input type="text" value={form.bairroResponsavel} onChange={(e) => setForm({ ...form, bairroResponsavel: e.target.value })} disabled={alunoIsResponsavel} className={`form-input ${alunoIsResponsavel ? 'disabled' : ''}`} /></div>
                                 <div><label className="form-label">Cidade</label><input type="text" value={form.cidadeResponsavel} onChange={(e) => setForm({ ...form, cidadeResponsavel: e.target.value })} disabled={alunoIsResponsavel} className={`form-input ${alunoIsResponsavel ? 'disabled' : ''}`} /></div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Configurações Financeiras */}
+                    {form.perfil === 4 && (
+                        <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: '20px' }}>
+                            <h4 style={{ fontSize: '14px', fontWeight: 600, color: '#111827', marginBottom: '16px' }}>Configurações Financeiras</h4>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                                <div>
+                                    <label className="form-label">Vencimento Mensalidade</label>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <input
+                                            type="number"
+                                            min="1"
+                                            max="31"
+                                            value={form.diaVencimento}
+                                            onChange={(e) => setForm({ ...form, diaVencimento: e.target.value })}
+                                            className="form-input"
+                                            style={{ width: '80px', textAlign: 'center' }}
+                                            placeholder="Ex: 10"
+                                        />
+                                        <span style={{ fontSize: '13px', color: '#6b7280' }}>de cada mês</span>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="form-label">Qtde de Parcelas</label>
+                                    <select value={form.quantidadeParcelas} onChange={(e) => setForm({ ...form, quantidadeParcelas: e.target.value })} className="form-select">
+                                        <option value="">Nenhuma</option>
+                                        {Array.from({ length: prazoMaximoParcelamento }, (_, i) => i + 1).map(num => (
+                                            <option key={num} value={num}>{num}x</option>
+                                        ))}
+                                    </select>
+                                </div>
                             </div>
                         </div>
                     )}

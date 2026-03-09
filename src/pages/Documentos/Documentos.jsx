@@ -19,6 +19,7 @@ export default function Documentos() {
         { id: 'Conclusao', label: 'Declaração de Conclusão', description: 'Declaração de conclusão de curso' },
         { id: 'Certificado', label: 'Certificado', description: 'Certificado de conclusão' },
         { id: 'LiberacaoEstagio', label: 'Liberação de Estágio', description: 'Autorização para início de estágio' },
+        { id: 'HistoricoEscolar', label: 'Histórico Escolar', description: 'Médias das disciplinas e carga horária' },
     ];
 
     const handleBusca = async () => { if (!busca.trim()) return; try { try { const res = await pessoaService.getByIdFuncional(busca.trim()); if (res.data) { setResultados([res.data]); return; } } catch { } const res = await pessoaService.getAll(0); setResultados((res.data || []).filter(p => p.nomeCompleto?.toLowerCase().includes(busca.toLowerCase()) || p.idFuncional?.toLowerCase().includes(busca.toLowerCase()))); } catch { setResultados([]); } };

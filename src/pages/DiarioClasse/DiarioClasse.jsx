@@ -78,7 +78,7 @@ export default function DiarioClasse() {
     const loadMatriculas = async () => {
         try {
             const res = await turmaService.getMatriculas(parseInt(filtro.turmaId));
-            const data = Array.isArray(res.data) ? res.data.filter(m => m.status === 1) : [];
+            const data = Array.isArray(res.data) ? res.data.filter(m => m.status === 'Ativo' || m.status === 1) : [];
             setMatriculas(data);
             setPresencas(data.map(m => ({ alunoId: m.alunoId, presente: true, faltaJustificada: false, justificativa: null })));
         } catch { setMatriculas([]); setPresencas([]); }
