@@ -66,6 +66,29 @@ export default function Cursos() {
         }
     };
 
+    const handleSort = async (direction, index) => {
+        const newOrder = [...linkedDisciplinaIds];
+        const targetIndex = direction === 'up' ? index - 1 : index + 1;
+        
+        if (targetIndex < 0 || targetIndex >= newOrder.length) return;
+
+        // Swap the elements
+        [newOrder[index], newOrder[targetIndex]] = [newOrder[targetIndex], newOrder[index]];
+        
+        // Update local state immediately for UI responsiveness
+        setLinkedDisciplinaIds(newOrder);
+
+        // Sync with backend
+        try {
+            await cursoService.reordenarDisciplinas(selectedCurso.id, newOrder);
+        } catch (err) {
+            alert('Erro ao salvar nova ordem das disciplinas no servidor.');
+            // Reload from server in case of error to restore true state
+            const res = await cursoService.getDisciplinas(selectedCurso.id);
+            setLinkedDisciplinaIds(Array.isArray(res.data) ? res.data : []);
+        }
+    };
+
     const items = tab === 'cursos' ? cursos : disciplinas;
 
     return (
@@ -146,38 +169,78 @@ export default function Cursos() {
                     ) : (
                         <div>
                             <p style={{ fontSize: '13px', color: '#6b7280', marginBottom: '16px' }}>
-                                Selecione as disciplinas que fazem parte deste curso. Clique para vincular ou desvincular.
+                                Selecione as disciplinas deste curso. Use as setas para definir a prioridade (Ordem de Ensino) para o cronograma.
                             </p>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '400px', overflowY: 'auto' }}>
-                                {disciplinas.map(d => {
-                                    const isLinked = linkedDisciplinaIds.includes(d.id);
-                                    return (
-                                        <button key={d.id} onClick={() => toggleDisciplina(d.id)}
-                                            style={{
-                                                width: '100%', textAlign: 'left', padding: '14px 16px', borderRadius: '10px',
-                                                fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '12px',
-                                                border: isLinked ? '1.5px solid #2563eb' : '1px solid #e5e7eb',
-                                                background: isLinked ? '#eff6ff' : 'white',
-                                                transition: 'all 0.15s ease',
-                                            }}>
-                                            <div style={{
-                                                width: '20px', height: '20px', borderRadius: '6px', flexShrink: 0,
-                                                border: isLinked ? '2px solid #2563eb' : '2px solid #d1d5db',
-                                                background: isLinked ? '#2563eb' : 'white',
-                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                            }}>
-                                                {isLinked && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>}
+                            
+                            {/* Unlinked Disciplines First, or mixed. Let's separate Linked vs Unlinked for easier sorting */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '450px', overflowY: 'auto', paddingRight: '4px' }}>
+                               
+                               {/* Linked Disciplines First - Sortable */}
+                               {linkedDisciplinaIds.map((id, index) => {
+                                   const d = disciplinas.find(x => x.id === id);
+                                   if (!d) return null;
+                                   return (
+                                       <div key={`linked-${d.id}`} style={{
+                                           width: '100%', padding: '12px 16px', borderRadius: '10px',
+                                           fontSize: '14px', display: 'flex', alignItems: 'center', gap: '12px',
+                                           border: '1.5px solid #2563eb', background: '#eff6ff', transition: 'all 0.15s ease',
+                                       }}>
+                                            {/* Sorting Arrows */}
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginRight: '6px' }}>
+                                                <button onClick={() => handleSort('up', index)} disabled={index === 0} style={{ border: 'none', background: 'transparent', cursor: index === 0 ? 'not-allowed' : 'pointer', opacity: index === 0 ? 0.3 : 1, padding: '2px' }}>
+                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>
+                                                </button>
+                                                <button onClick={() => handleSort('down', index)} disabled={index === linkedDisciplinaIds.length - 1} style={{ border: 'none', background: 'transparent', cursor: index === linkedDisciplinaIds.length - 1 ? 'not-allowed' : 'pointer', opacity: index === linkedDisciplinaIds.length - 1 ? 0.3 : 1, padding: '2px' }}>
+                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                                                </button>
                                             </div>
+
+                                            <button onClick={() => toggleDisciplina(d.id)} style={{
+                                                width: '20px', height: '20px', borderRadius: '6px', flexShrink: 0, padding: 0,
+                                                border: '2px solid #2563eb', background: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer'
+                                            }}>
+                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                            </button>
+                                            
                                             <div style={{ flex: 1 }}>
-                                                <div style={{ fontWeight: 500, color: isLinked ? '#1e40af' : '#111827' }}>{d.nome}</div>
-                                                <div style={{ fontSize: '12px', color: '#9ca3af', marginTop: '2px' }}>{d.cargaHoraria}h • {d.idFuncional}</div>
+                                                <div style={{ fontWeight: 600, color: '#1e40af', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                    <span style={{ fontSize: '11px', background: '#bfdbfe', color: '#1e3a8a', padding: '2px 6px', borderRadius: '4px' }}>Ordem {index + 1}</span>
+                                                    {d.nome}
+                                                </div>
+                                                <div style={{ fontSize: '12px', color: '#687bb3', marginTop: '2px' }}>{d.cargaHoraria}h • {d.idFuncional}</div>
                                             </div>
+                                       </div>
+                                   );
+                               })}
+
+                               {/* Separator if both lists have items */}
+                               {linkedDisciplinaIds.length > 0 && disciplinas.length > linkedDisciplinaIds.length && (
+                                   <div style={{ height: '1px', background: '#e5e7eb', margin: '8px 0' }}></div>
+                               )}
+
+                               {/* Unlinked Disciplines */}
+                               {disciplinas.filter(d => !linkedDisciplinaIds.includes(d.id)).map(d => (
+                                    <div key={`unlinked-${d.id}`} style={{
+                                        width: '100%', padding: '12px 16px', borderRadius: '10px',
+                                        fontSize: '14px', display: 'flex', alignItems: 'center', gap: '12px',
+                                        border: '1px solid #e5e7eb', background: 'white', opacity: 0.8
+                                    }}>
+                                        <div style={{ width: '20px', display: 'flex' }}></div> {/* Spacer for alignment with arrows */}
+                                        <button onClick={() => toggleDisciplina(d.id)} style={{
+                                            width: '20px', height: '20px', borderRadius: '6px', flexShrink: 0, padding: 0,
+                                            border: '2px solid #d1d5db', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer'
+                                        }}>
                                         </button>
-                                    );
-                                })}
+                                        <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => toggleDisciplina(d.id)}>
+                                            <div style={{ fontWeight: 500, color: '#4b5563' }}>{d.nome}</div>
+                                            <div style={{ fontSize: '12px', color: '#9ca3af', marginTop: '2px' }}>{d.cargaHoraria}h • {d.idFuncional}</div>
+                                        </div>
+                                    </div>
+                                ))}
+
                             </div>
                             <div style={{ marginTop: '16px', padding: '12px 16px', background: '#f9fafb', borderRadius: '10px', fontSize: '13px', color: '#6b7280' }}>
-                                <strong>{linkedDisciplinaIds.length}</strong> disciplina(s) vinculada(s) a este curso
+                                A ordem definida acima dita a prioridade em que o motor automático aloca as turmas no <strong>Cronograma</strong>.
                             </div>
                         </div>
                     )}

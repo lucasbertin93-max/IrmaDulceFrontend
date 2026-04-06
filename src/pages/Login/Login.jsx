@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
+import useAuthStore from '../../store/useAuthStore';
 
 export default function Login() {
     const [login, setLogin] = useState('');
     const [senha, setSenha] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
-    const { login: doLogin } = useAuth();
+    const doLogin = useAuthStore(state => state.login);
     const navigate = useNavigate();
 
     const handleSubmit = async (e) => {

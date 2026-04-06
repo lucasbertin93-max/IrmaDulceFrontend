@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { templateService } from '../../services/endpoints';
+import Modal from '../../components/ui/Modal';
 
 const sysFields = [
     { label: 'Sistema: Data da Emissão', value: 'Sistema.DataEmissao' },
@@ -75,9 +76,8 @@ export default function ConfigurarTemplateModal({ isOpen, onClose, documentType 
             if (error.response && error.response.status === 404) {
                 setTemplateConfig(null);
                 setTags([]);
-            } else {
-                setErrorMsg('Erro ao carregar configurações do template.');
             }
+            // Outros erros já exibem Toast via Interceptor Global
         } finally {
             setLoading(false);
         }
@@ -110,7 +110,7 @@ export default function ConfigurarTemplateModal({ isOpen, onClose, documentType 
             setFile(null);
             if (fileInputRef.current) fileInputRef.current.value = '';
         } catch (error) {
-            setErrorMsg(error.response?.data?.message || 'Erro ao enviar template');
+            // Tratado no Interceptor Global
         } finally {
             setLoading(false);
         }
@@ -156,7 +156,7 @@ export default function ConfigurarTemplateModal({ isOpen, onClose, documentType 
             setSuccessMsg('Tags salvas com sucesso!');
             setTimeout(() => onClose(), 1500);
         } catch (error) {
-            setErrorMsg(error.response?.data?.message || 'Erro ao salvar tags');
+            // Erro já será disparado pelo Interceptor via Toast.
             if (modalBodyRef.current) modalBodyRef.current.scrollTo({ top: 0, behavior: 'smooth' });
         } finally {
             setLoading(false);
@@ -166,103 +166,13 @@ export default function ConfigurarTemplateModal({ isOpen, onClose, documentType 
     if (!isOpen) return null;
 
     return (
-        <div className="modal-overlay">
-            <div className="modal-container" style={{ maxWidth: '600px', width: '90%' }}>
-                <div className="modal-header">
-                    <h2>Configurar Template: {documentType?.label}</h2>
-                    <button onClick={onClose} className="modal-close">&times;</button>
-                </div>
-
-                <div className="modal-body" ref={modalBodyRef} style={{ maxHeight: '70vh', overflowY: 'auto' }}>
-                    {errorMsg && <div className="alert-error" style={{ marginBottom: '16px' }}>{errorMsg}</div>}
-                    {successMsg && <div className="alert-success" style={{ marginBottom: '16px', padding: '12px', background: '#d1fae5', color: '#065f46', borderRadius: '6px', fontSize: '14px' }}>{successMsg}</div>}
-
-                    {loading && !templateConfig && <p>Carregando...</p>}
-
-                    <div style={{ marginBottom: '24px', padding: '16px', background: '#f9fafb', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
-                        <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#111827', marginBottom: '8px' }}>Arquivo do Template (.docx)</h3>
-                        {templateConfig ? (
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                                <span style={{ fontSize: '14px', color: '#059669', fontWeight: 500 }}>
-                                    ✓ Template Existente: {templateConfig.nomeArquivo}
-                                </span>
-                            </div>
-                        ) : (
-                            <p style={{ fontSize: '13px', color: '#6b7280', marginBottom: '12px' }}>
-                                Nenhum template configurado para este documento.
-                            </p>
-                        )}
-
-                        <div style={{ display: 'flex', gap: '8px' }}>
-                            <input
-                                type="file"
-                                accept=".docx"
-                                onChange={handleFileChange}
-                                ref={fileInputRef}
-                                className="form-input"
-                                style={{ flex: 1 }}
-                            />
-                            <button
-                                onClick={handleUploadTemplate}
-                                className="btn-primary"
-                                disabled={!file || loading}
-                            >
-                                {loading ? 'Enviando...' : 'Fazer Upload'}
-                            </button>
-                        </div>
-                    </div>
-
-                    <div style={{ padding: '16px', border: '1px solid #e5e7eb', borderRadius: '8px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                            <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#111827' }}>Mapeamento de Tags</h3>
-                            <button onClick={handleAddTag} className="btn-secondary" style={{ padding: '6px 12px', fontSize: '12px' }}>
-                                + Adicionar Tag
-                            </button>
-                        </div>
-
-                        <p style={{ fontSize: '13px', color: '#6b7280', marginBottom: '16px' }}>
-                            Defina as tags utilizadas no template para preenchimento dinâmico. Ex: <span style={{ fontFamily: 'monospace' }}>{`{{NOME_ALUNO}}`}</span>
-                        </p>
-
-                        {!templateConfig ? (
-                            <div className="alert-warning" style={{ fontSize: '13px' }}>Você precisa fazer o upload de um arquivo de template antes de configurar as tags.</div>
-                        ) : tags.length === 0 ? (
-                            <p style={{ fontSize: '13px', color: '#6b7280', textAlign: 'center', padding: '16px 0' }}>Nenhuma tag configurada.</p>
-                        ) : (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                                {tags.map((tag, i) => (
-                                    <div key={i} style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                                        <input
-                                            placeholder="Ex: {{NOME}}"
-                                            className="form-input"
-                                            value={tag.tagNoDocumento}
-                                            onChange={(e) => handleTagChange(i, 'tagNoDocumento', e.target.value)}
-                                            style={{ flex: 1, fontFamily: 'monospace' }}
-                                        />
-                                        <select
-                                            className="form-select"
-                                            value={tag.campoSistema}
-                                            onChange={(e) => handleTagChange(i, 'campoSistema', e.target.value)}
-                                            style={{ flex: 2 }}
-                                        >
-                                            <option value="">-- Selecione o campo --</option>
-                                            {sysFields.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
-                                        </select>
-                                        <button
-                                            onClick={() => handleRemoveTag(i)}
-                                            style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '8px' }}
-                                            title="Remover"
-                                        >
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>
-                                        </button>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                <div className="modal-footer">
+        <Modal
+            open={isOpen}
+            onClose={onClose}
+            title={`Configurar Template: ${documentType?.label}`}
+            maxWidth="600px"
+            footer={
+                <>
                     <button onClick={onClose} className="btn-cancel">Cancelar</button>
                     <button
                         onClick={handleSaveTags}
@@ -271,8 +181,97 @@ export default function ConfigurarTemplateModal({ isOpen, onClose, documentType 
                     >
                         {loading ? 'Salvando...' : 'Salvar Tags'}
                     </button>
+                </>
+            }
+        >
+            <div ref={modalBodyRef}>
+                {errorMsg && <div className="alert-error" style={{ marginBottom: '16px' }}>{errorMsg}</div>}
+                {successMsg && <div className="alert-success" style={{ marginBottom: '16px', padding: '12px', background: '#d1fae5', color: '#065f46', borderRadius: '6px', fontSize: '14px' }}>{successMsg}</div>}
+
+                {loading && !templateConfig && <p>Carregando...</p>}
+
+                <div style={{ marginBottom: '24px', padding: '16px', background: '#f9fafb', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
+                    <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#111827', marginBottom: '8px' }}>Arquivo do Template (.docx)</h3>
+                    {templateConfig ? (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                            <span style={{ fontSize: '14px', color: '#059669', fontWeight: 500 }}>
+                                ✓ Template Existente: {templateConfig.nomeArquivo}
+                            </span>
+                        </div>
+                    ) : (
+                        <p style={{ fontSize: '13px', color: '#6b7280', marginBottom: '12px' }}>
+                            Nenhum template configurado para este documento.
+                        </p>
+                    )}
+
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <input
+                            type="file"
+                            accept=".docx"
+                            onChange={handleFileChange}
+                            ref={fileInputRef}
+                            className="form-input"
+                            style={{ flex: 1 }}
+                        />
+                        <button
+                            onClick={handleUploadTemplate}
+                            className="btn-primary"
+                            disabled={!file || loading}
+                        >
+                            {loading ? 'Enviando...' : 'Fazer Upload'}
+                        </button>
+                    </div>
+                </div>
+
+                <div style={{ padding: '16px', border: '1px solid #e5e7eb', borderRadius: '8px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                        <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#111827' }}>Mapeamento de Tags</h3>
+                        <button onClick={handleAddTag} className="btn-cancel" style={{ padding: '6px 12px', fontSize: '12px', border: '1px solid #e5e7eb' }}>
+                            + Adicionar Tag
+                        </button>
+                    </div>
+
+                    <p style={{ fontSize: '13px', color: '#6b7280', marginBottom: '16px' }}>
+                        Defina as tags utilizadas no template para preenchimento dinâmico. Ex: <span style={{ fontFamily: 'monospace' }}>{`{{NOME_ALUNO}}`}</span>
+                    </p>
+
+                    {!templateConfig ? (
+                        <div className="alert-error" style={{ fontSize: '13px', background: '#fef3c7', color: '#92400e', borderColor: '#fde68a' }}>Você precisa fazer o upload de um arquivo de template antes de configurar as tags.</div>
+                    ) : tags.length === 0 ? (
+                        <p style={{ fontSize: '13px', color: '#6b7280', textAlign: 'center', padding: '16px 0' }}>Nenhuma tag configurada.</p>
+                    ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                            {tags.map((tag, i) => (
+                                <div key={i} style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                                    <input
+                                        placeholder="Ex: {{NOME}}"
+                                        className="form-input"
+                                        value={tag.tagNoDocumento}
+                                        onChange={(e) => handleTagChange(i, 'tagNoDocumento', e.target.value)}
+                                        style={{ flex: 1, fontFamily: 'monospace' }}
+                                    />
+                                    <select
+                                        className="form-select"
+                                        value={tag.campoSistema}
+                                        onChange={(e) => handleTagChange(i, 'campoSistema', e.target.value)}
+                                        style={{ flex: 2 }}
+                                    >
+                                        <option value="">-- Selecione o campo --</option>
+                                        {sysFields.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
+                                    </select>
+                                    <button
+                                        onClick={() => handleRemoveTag(i)}
+                                        style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '8px' }}
+                                        title="Remover"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
             </div>
-        </div>
+        </Modal>
     );
 }

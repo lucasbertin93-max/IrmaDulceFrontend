@@ -2,7 +2,8 @@
 
 @layer base {
   :root {
-    --color-primary: #2563eb;
+    --color-primary: #0d9488;
+    --color-primary-dark: #0f766e;
     --sidebar-width: 240px;
     --header-height: 64px;
     --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.04);
@@ -131,7 +132,7 @@
   justify-content: center;
   font-weight: 600;
   font-size: 15px;
-  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
+  box-shadow: 0 2px 8px rgba(13, 148, 136, 0.25);
 }
 
 .header-user-info {
@@ -226,7 +227,7 @@
 
 .search-input:focus {
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+  box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.15);
   background: white;
 }
 
@@ -262,7 +263,7 @@
 }
 
 .btn-blue:hover {
-  background: #1d4ed8;
+  background: var(--color-primary-dark);
 }
 
 .btn-blue:disabled {
@@ -379,7 +380,7 @@
 
 .form-input:focus {
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+  box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.15);
 }
 
 .form-select {
@@ -397,7 +398,7 @@
 
 .form-select:focus {
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+  box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.15);
 }
 
 /* ===== STAT CARD ===== */

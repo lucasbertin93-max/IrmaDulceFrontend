@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
+import useAuthStore from '../../store/useAuthStore';
 
 const menuItems = [
     { path: '/', label: 'Dashboard', roles: null },
@@ -10,11 +10,12 @@ const menuItems = [
     { path: '/documentos', label: 'Documentos', roles: ['Master', 'Administrativo'] },
     { path: '/financeiro', label: 'Financeiro', roles: ['Master', 'Administrativo', 'Aluno'] },
     { path: '/cronograma', label: 'Cronograma', roles: null },
+    { path: '/usuarios', label: 'Usuários e Permissões', roles: ['Master', 'Administrativo'] },
     { path: '/configuracoes', label: 'Configurações', roles: ['Master'] },
 ];
 
 export default function Sidebar() {
-    const { hasRole } = useAuth();
+    const hasRole = useAuthStore(state => state.hasRole);
     const visibleItems = menuItems.filter(
         (item) => !item.roles || item.roles.some((role) => hasRole(role))
     );

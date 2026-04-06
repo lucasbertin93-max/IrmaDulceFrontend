@@ -24,7 +24,56 @@ export default function Documentos() {
 
     const handleBusca = async () => { if (!busca.trim()) return; try { try { const res = await pessoaService.getByIdFuncional(busca.trim()); if (res.data) { setResultados([res.data]); return; } } catch { } const res = await pessoaService.getAll(0); setResultados((res.data || []).filter(p => p.nomeCompleto?.toLowerCase().includes(busca.toLowerCase()) || p.idFuncional?.toLowerCase().includes(busca.toLowerCase()))); } catch { setResultados([]); } };
 
-    const handleEmitir = async (tipoDocumento) => { if (!alunoSelecionado) { setError('Selecione um aluno primeiro.'); return; } setEmitindo(tipoDocumento); setError(''); try { const res = await documentoService.emitir({ alunoId: alunoSelecionado.id, tipoDocumento }); const blob = new Blob([res.data], { type: res.headers['content-type'] || 'application/octet-stream' }); const url = window.URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `${tipoDocumento}_${alunoSelecionado.idFuncional}.docx`; a.click(); window.URL.revokeObjectURL(url); } catch (err) { setError(err.response?.status === 403 ? 'Aluno possui pendências financeiras.' : (err.response?.data?.message || 'Erro ao emitir.')); } finally { setEmitindo(''); } };
+    const handleEmitir = async (tipoDocumento) => { 
+        if (!alunoSelecionado) { setError('Selecione um aluno primeiro.'); return; } 
+        setEmitindo(tipoDocumento); 
+        setError(''); 
+        try { 
+            const res = await documentoService.emitir({ alunoId: alunoSelecionado.id, tipoDocumento }); 
+            const { jobId } = res.data;
+            
+            // Polling
+            const intervalId = setInterval(async () => {
+                try {
+                    const statusRes = await documentoService.status(jobId);
+                    if (statusRes.data.error) {
+                        clearInterval(intervalId);
+                        setError('Erro no servidor ao processar: ' + statusRes.data.error);
+                        setEmitindo('');
+                    } else if (statusRes.data.isCompleted) {
+                        clearInterval(intervalId);
+                        
+                        try {
+                            const downloadRes = await documentoService.download(jobId);
+                            const blob = new Blob([downloadRes.data], { type: downloadRes.headers['content-type'] || 'application/octet-stream' }); 
+                            const url = window.URL.createObjectURL(blob); 
+                            const a = document.createElement('a'); 
+                            a.href = url; 
+                            a.download = `${tipoDocumento}_${alunoSelecionado.idFuncional}.docx`; 
+                            a.click(); 
+                            window.URL.revokeObjectURL(url);
+                        } catch (err) {
+                            setError('Erro ao fazer download do arquivo processado.');
+                        } finally {
+                            setEmitindo('');
+                        }
+                    }
+                } catch (err) {
+                    console.error("Polling error", err);
+                    // Silently continue polling unless it's a critical error like 404 (not found)
+                    if (err.response?.status === 404) {
+                        clearInterval(intervalId);
+                        setError('Processamento cancelado ou expirado.');
+                        setEmitindo('');
+                    }
+                }
+            }, 3000);
+
+        } catch (err) { 
+            setError(err.response?.status === 403 ? 'Aluno possui pendências financeiras.' : (err.response?.data?.message || 'Erro ao enfileirar emissão.')); 
+            setEmitindo(''); 
+        } 
+    };
 
     return (
         <div>

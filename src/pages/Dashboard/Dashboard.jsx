@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
+import useAuthStore from '../../store/useAuthStore';
 import { pessoaService, turmaService, financeiroService } from '../../services/endpoints';
 
 export default function Dashboard() {
-    const { user } = useAuth();
+    const user = useAuthStore(state => state.user);
     const [stats, setStats] = useState({ alunos: '—', docentes: '—', turmas: '—', atrasadas: '—' });
     const [loading, setLoading] = useState(true);
 

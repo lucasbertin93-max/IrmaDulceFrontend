@@ -24,6 +24,13 @@ export default function Cadastro() {
     const [alunoIsResponsavel, setAlunoIsResponsavel] = useState(false);
     const [prazoMaximoParcelamento, setPrazoMaximoParcelamento] = useState(26);
 
+    // Teacher Availability Modal
+    const [showDispModal, setShowDispModal] = useState(false);
+    const [dispDocente, setDispDocente] = useState(null);
+    const [disponibilidades, setDisponibilidades] = useState([]);
+    const [dispLoading, setDispLoading] = useState(false);
+    const [dispSaving, setDispSaving] = useState(false);
+
     const estadosCivis = ['Solteiro(a)', 'Casado(a)', 'Divorciado(a)', 'Viúvo(a)', 'União Estável'];
 
     useEffect(() => { loadPessoas(); }, [perfilFiltro]);
@@ -159,6 +166,46 @@ export default function Cadastro() {
         catch { alert('Erro ao desativar.'); }
     };
 
+    // Teacher Availability Actions
+    const openDispModal = async (docente) => {
+        setDispDocente(docente);
+        setDispLoading(true);
+        setShowDispModal(true);
+        try {
+            const res = await pessoaService.getDisponibilidade(docente.id);
+            setDisponibilidades(Array.isArray(res.data) ? res.data : []);
+        } catch { setDisponibilidades([]); }
+        finally { setDispLoading(false); }
+    };
+
+    const handleAddDisp = () => {
+        setDisponibilidades([...disponibilidades, { diaSemana: 1, horaInicio: '08:00:00', horaFim: '12:00:00' }]);
+    };
+
+    const handleRemoveDisp = (index) => {
+        const newArr = [...disponibilidades];
+        newArr.splice(index, 1);
+        setDisponibilidades(newArr);
+    };
+
+    const handleDispChange = (index, field, value) => {
+        const newArr = [...disponibilidades];
+        newArr[index][field] = value;
+        setDisponibilidades(newArr);
+    };
+
+    const handleSaveDisp = async () => {
+        setDispSaving(true);
+        try {
+            await pessoaService.definirDisponibilidade(dispDocente.id, disponibilidades);
+            setShowDispModal(false);
+        } catch (err) {
+            alert(err.response?.data?.message || 'Erro ao salvar disponibilidade.');
+        } finally {
+            setDispSaving(false);
+        }
+    };
+
     const filtered = pessoas.filter(p =>
         !filtro || p.nomeCompleto?.toLowerCase().includes(filtro.toLowerCase()) ||
         p.cpf?.includes(filtro) || p.idFuncional?.toLowerCase().includes(filtro.toLowerCase())
@@ -213,6 +260,11 @@ export default function Cadastro() {
                                     </td>
                                     <td style={{ textAlign: 'right' }}>
                                         <div className="row-actions">
+                                            {p.perfil === 3 && (
+                                                <button onClick={() => openDispModal(p)} className="row-action-btn" style={{ color: '#2563eb', background: '#eff6ff', borderColor: '#bfdbfe' }}>
+                                                    Disponibilidade
+                                                </button>
+                                            )}
                                             <button onClick={() => openEdit(p)} className="row-action-btn">Editar</button>
                                             <button onClick={() => handleDelete(p.id)} className="row-action-btn danger">Desativar</button>
                                         </div>
@@ -387,6 +439,62 @@ export default function Cadastro() {
                                     </select>
                                 </div>
                             </div>
+                        </div>
+                    )}
+                </div>
+            </Modal>
+
+            {/* Teacher Availability Modal */}
+            <Modal open={showDispModal} onClose={() => setShowDispModal(false)} title={`Disponibilidade: ${dispDocente?.nomeCompleto || ''}`} maxWidth="600px"
+                footer={<><button onClick={() => setShowDispModal(false)} className="btn-cancel">Cancelar</button><button onClick={handleSaveDisp} disabled={dispSaving} className="btn-blue">{dispSaving ? 'Salvando...' : 'Salvar'}</button></>}>
+                <div>
+                    {dispLoading ? (
+                        <p style={{ color: '#9ca3af', fontSize: '14px', textAlign: 'center', padding: '24px 0' }}>Carregando...</p>
+                    ) : (
+                        <div>
+                            <p style={{ fontSize: '13px', color: '#6b7280', marginBottom: '16px' }}>
+                                Defina os dias e horários em que este docente está disponível. O Motor de Cronograma evitará alocar turmas fora deste período.
+                            </p>
+                            
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
+                                {disponibilidades.map((d, index) => (
+                                    <div key={index} style={{ display: 'flex', gap: '12px', alignItems: 'center', padding: '12px', background: '#f9fafb', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
+                                        <div style={{ flex: 1 }}>
+                                            <label className="form-label" style={{ fontSize: '12px' }}>Dia da Semana</label>
+                                            <select value={d.diaSemana} onChange={(e) => handleDispChange(index, 'diaSemana', parseInt(e.target.value))} className="form-select" style={{ fontSize: '13px', padding: '6px 10px' }}>
+                                                <option value={1}>Segunda-feira</option>
+                                                <option value={2}>Terça-feira</option>
+                                                <option value={3}>Quarta-feira</option>
+                                                <option value={4}>Quinta-feira</option>
+                                                <option value={5}>Sexta-feira</option>
+                                                <option value={6}>Sábado</option>
+                                                <option value={0}>Domingo</option>
+                                            </select>
+                                        </div>
+                                        <div style={{ width: '120px' }}>
+                                            <label className="form-label" style={{ fontSize: '12px' }}>Início</label>
+                                            <input type="time" value={d.horaInicio.substring(0,5)} onChange={(e) => handleDispChange(index, 'horaInicio', e.target.value + ':00')} className="form-input" style={{ fontSize: '13px', padding: '6px 10px' }} />
+                                        </div>
+                                        <div style={{ width: '120px' }}>
+                                            <label className="form-label" style={{ fontSize: '12px' }}>Término</label>
+                                            <input type="time" value={d.horaFim.substring(0,5)} onChange={(e) => handleDispChange(index, 'horaFim', e.target.value + ':00')} className="form-input" style={{ fontSize: '13px', padding: '6px 10px' }} />
+                                        </div>
+                                        <button onClick={() => handleRemoveDisp(index)} style={{ marginTop: '18px', border: 'none', background: 'transparent', color: '#ef4444', cursor: 'pointer', padding: '4px' }} title="Remover">
+                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+                                        </button>
+                                    </div>
+                                ))}
+                                {disponibilidades.length === 0 && (
+                                    <div style={{ padding: '24px 0', textAlign: 'center', color: '#9ca3af', fontSize: '14px', border: '1px dashed #d1d5db', borderRadius: '8px' }}>
+                                        Nenhuma disponibilidade configurada. O docente pode ser alocado em qualquer horário padrão.
+                                    </div>
+                                )}
+                            </div>
+                            
+                            <button onClick={handleAddDisp} style={{ padding: '8px 14px', background: 'white', border: '1.5px dashed #3b82f6', color: '#3b82f6', borderRadius: '8px', cursor: 'pointer', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                                Adicionar Disponibilidade
+                            </button>
                         </div>
                     )}
                 </div>

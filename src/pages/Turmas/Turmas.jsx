@@ -31,6 +31,7 @@ export default function Turmas() {
     const [turmaDisciplinas, setTurmaDisciplinas] = useState([]);
     const [docentes, setDocentes] = useState([]);
     const [discLoading, setDiscLoading] = useState(false);
+    const [discDiasLetivos, setDiscDiasLetivos] = useState([]);
 
     // Diary view modal
     const [showDiarioModal, setShowDiarioModal] = useState(false);
@@ -40,6 +41,13 @@ export default function Turmas() {
     const [historico, setHistorico] = useState(null);
     const [historicoLoading, setHistoricoLoading] = useState(false);
     const [notasData, setNotasData] = useState(null);
+
+    // Class Days (Dias Letivos) Modal
+    const [showDiasLetivosModal, setShowDiasLetivosModal] = useState(false);
+    const [diasLetivosTurma, setDiasLetivosTurma] = useState(null);
+    const [diasLetivos, setDiasLetivos] = useState([]);
+    const [diasLetivosLoading, setDiasLetivosLoading] = useState(false);
+    const [diasLetivosSaving, setDiasLetivosSaving] = useState(false);
 
     useEffect(() => { loadTurmas(); loadCursos(); }, []);
 
@@ -100,13 +108,15 @@ export default function Turmas() {
         setDiscLoading(true);
         setShowDiscModal(true);
         try {
-            const [discRes, docenteRes] = await Promise.all([
+            const [discRes, docenteRes, diasRes] = await Promise.all([
                 turmaService.getDisciplinas(turma.id),
                 pessoaService.getAll(3), // Perfil.Docente = 3
+                turmaService.getDiasLetivos(turma.id)
             ]);
             setTurmaDisciplinas(Array.isArray(discRes.data) ? discRes.data : []);
             setDocentes(Array.isArray(docenteRes.data) ? docenteRes.data : []);
-        } catch { setTurmaDisciplinas([]); setDocentes([]); }
+            setDiscDiasLetivos(Array.isArray(diasRes.data) ? diasRes.data : []);
+        } catch { setTurmaDisciplinas([]); setDocentes([]); setDiscDiasLetivos([]); }
         finally { setDiscLoading(false); }
     };
 
@@ -120,6 +130,24 @@ export default function Turmas() {
             ));
         } catch (err) { alert(err.response?.data?.message || 'Erro ao atribuir docente.'); }
     };
+
+    const handleToggleHorario = async (disciplinaId, diaSemana, turno) => {
+        const tdIndex = turmaDisciplinas.findIndex(x => x.disciplinaId === disciplinaId);
+        if (tdIndex === -1) return;
+        const td = turmaDisciplinas[tdIndex];
+        const horarios = td.horarios || [];
+        const exists = horarios.find(h => h.diaSemana === diaSemana && h.turno === turno);
+        let newHorarios;
+        if (exists) newHorarios = horarios.filter(h => !(h.diaSemana === diaSemana && h.turno === turno));
+        else newHorarios = [...horarios, { diaSemana, turno }];
+
+        try {
+            await turmaService.definirHorarios(discTurma.id, disciplinaId, newHorarios);
+            setTurmaDisciplinas(prev => prev.map(item => item.disciplinaId === disciplinaId ? { ...item, horarios: newHorarios } : item));
+        } catch (err) { alert(err.response?.data?.message || 'Erro ao salvar horário.'); }
+    };
+
+    const diaNomes = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
 
     // Diary view
     const openDiarioModal = async (turma) => {
@@ -158,6 +186,46 @@ export default function Turmas() {
         if (!dateStr) return '';
         const d = new Date(dateStr);
         return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+    };
+
+    // Class Days Actions
+    const openDiasLetivosModal = async (turma) => {
+        setDiasLetivosTurma(turma);
+        setDiasLetivosLoading(true);
+        setShowDiasLetivosModal(true);
+        try {
+            const res = await turmaService.getDiasLetivos(turma.id);
+            setDiasLetivos(Array.isArray(res.data) ? res.data : []);
+        } catch { setDiasLetivos([]); }
+        finally { setDiasLetivosLoading(false); }
+    };
+
+    const handleAddDiaLetivo = () => {
+        setDiasLetivos([...diasLetivos, { diaSemana: 1, horaInicio: '08:00:00', horaFim: '12:00:00' }]);
+    };
+
+    const handleRemoveDiaLetivo = (index) => {
+        const newArr = [...diasLetivos];
+        newArr.splice(index, 1);
+        setDiasLetivos(newArr);
+    };
+
+    const handleDiaLetivoChange = (index, field, value) => {
+        const newArr = [...diasLetivos];
+        newArr[index][field] = value;
+        setDiasLetivos(newArr);
+    };
+
+    const handleSaveDiasLetivos = async () => {
+        setDiasLetivosSaving(true);
+        try {
+            await turmaService.definirDiasLetivos(diasLetivosTurma.id, diasLetivos);
+            setShowDiasLetivosModal(false);
+        } catch (err) {
+            alert(err.response?.data?.message || 'Erro ao salvar dias letivos.');
+        } finally {
+            setDiasLetivosSaving(false);
+        }
     };
 
     const getCursoNome = (cursoId) => cursos.find(c => c.id === cursoId)?.nome || '—';
@@ -287,6 +355,13 @@ export default function Turmas() {
                                             }}>
                                             📚 Disciplinas
                                         </button>
+                                        <button onClick={(e) => { e.stopPropagation(); openDiasLetivosModal(t); }}
+                                            style={{
+                                                padding: '6px 12px', fontSize: '12px', background: '#fdf4ff', color: '#c026d3', border: '1px solid #fbcfe8',
+                                                borderRadius: '8px', cursor: 'pointer', fontWeight: 500
+                                            }}>
+                                            🕒 Grade (Dias Letivos)
+                                        </button>
                                         <button onClick={(e) => { e.stopPropagation(); openDiarioModal(t); }}
                                             style={{
                                                 padding: '6px 12px', fontSize: '12px', background: '#fff7ed', color: '#ea580c', border: '1px solid #fed7aa',
@@ -412,27 +487,57 @@ export default function Turmas() {
                                         background: td.docenteId ? '#eff6ff' : 'white',
                                         transition: 'all 0.15s',
                                     }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}>
-                                                <div className="avatar-sm" style={{ width: '36px', height: '36px', fontSize: '14px', background: '#6366f1', flexShrink: 0 }}>
-                                                    {td.disciplinaNome?.charAt(0) || 'D'}
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}>
+                                                    <div className="avatar-sm" style={{ width: '36px', height: '36px', fontSize: '14px', background: '#6366f1', flexShrink: 0 }}>
+                                                        {td.disciplinaNome?.charAt(0) || 'D'}
+                                                    </div>
+                                                    <div>
+                                                        <div style={{ fontWeight: 500, color: '#111827', fontSize: '14px' }}>{td.disciplinaNome}</div>
+                                                        {td.docenteNome && <div style={{ fontSize: '12px', color: '#2563eb', marginTop: '2px' }}>📎 {td.docenteNome}</div>}
+                                                    </div>
                                                 </div>
-                                                <div>
-                                                    <div style={{ fontWeight: 500, color: '#111827', fontSize: '14px' }}>{td.disciplinaNome}</div>
-                                                    {td.docenteNome && <div style={{ fontSize: '12px', color: '#2563eb', marginTop: '2px' }}>📎 {td.docenteNome}</div>}
-                                                </div>
+                                                <select
+                                                    value={td.docenteId || ''}
+                                                    onChange={(e) => handleDocenteChange(td.disciplinaId, e.target.value ? parseInt(e.target.value) : null)}
+                                                    className="form-select"
+                                                    style={{ maxWidth: '240px', fontSize: '13px' }}
+                                                >
+                                                    <option value="">Sem docente</option>
+                                                    {docentes.map(d => (
+                                                        <option key={d.id} value={d.id}>{d.nomeCompleto}</option>
+                                                    ))}
+                                                </select>
                                             </div>
-                                            <select
-                                                value={td.docenteId || ''}
-                                                onChange={(e) => handleDocenteChange(td.disciplinaId, e.target.value ? parseInt(e.target.value) : null)}
-                                                className="form-select"
-                                                style={{ maxWidth: '240px', fontSize: '13px' }}
-                                            >
-                                                <option value="">Sem docente</option>
-                                                {docentes.map(d => (
-                                                    <option key={d.id} value={d.id}>{d.nomeCompleto}</option>
-                                                ))}
-                                            </select>
+                                            
+                                            {/* Sub-tabela de Horários por Turnos configurados em Dias Letivos */}
+                                            {discDiasLetivos.length > 0 && (
+                                                <div style={{ background: '#f8fafc', padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                                    <p style={{ fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '8px' }}>Turnos Fixos na Semana</p>
+                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
+                                                        {discDiasLetivos.map(dia => {
+                                                            const isTurno1 = (td.horarios || []).some(h => h.diaSemana === dia.diaSemana && h.turno === 1);
+                                                            const isTurno2 = (td.horarios || []).some(h => h.diaSemana === dia.diaSemana && h.turno === 2);
+                                                            return (
+                                                                <div key={dia.id} style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: '100px', paddingRight: '12px', borderRight: '1px solid #e2e8f0' }}>
+                                                                    <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>{diaNomes[dia.diaSemana]}</span>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                        <label style={{ fontSize: '11px', color: '#334155', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
+                                                                            <input type="checkbox" checked={isTurno1} onChange={() => handleToggleHorario(td.disciplinaId, dia.diaSemana, 1)} /> Pré-Int
+                                                                        </label>
+                                                                    </div>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                        <label style={{ fontSize: '11px', color: '#334155', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
+                                                                            <input type="checkbox" checked={isTurno2} onChange={() => handleToggleHorario(td.disciplinaId, dia.diaSemana, 2)} /> Pós-Int
+                                                                        </label>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 ))}
@@ -604,6 +709,62 @@ export default function Turmas() {
                                     Falta Justificada
                                 </div>
                             </div>
+                        </div>
+                    )}
+                </div>
+            </Modal>
+
+            {/* Dias Letivos Modal */}
+            <Modal open={showDiasLetivosModal} onClose={() => setShowDiasLetivosModal(false)} title={`Grade de Horários: ${diasLetivosTurma?.nome || ''}`} maxWidth="600px"
+                footer={<><button onClick={() => setShowDiasLetivosModal(false)} className="btn-cancel">Cancelar</button><button onClick={handleSaveDiasLetivos} disabled={diasLetivosSaving} className="btn-blue">{diasLetivosSaving ? 'Salvando...' : 'Salvar'}</button></>}>
+                <div>
+                    {diasLetivosLoading ? (
+                        <p style={{ color: '#9ca3af', fontSize: '14px', textAlign: 'center', padding: '24px 0' }}>Carregando...</p>
+                    ) : (
+                        <div>
+                            <p style={{ fontSize: '13px', color: '#6b7280', marginBottom: '16px' }}>
+                                Configure os dias da semana e horários de aula regulares desta turma. O sistema de geração inteligente do Cronograma usará esta tabela como base.
+                            </p>
+                            
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
+                                {diasLetivos.map((d, index) => (
+                                    <div key={index} style={{ display: 'flex', gap: '12px', alignItems: 'center', padding: '12px', background: '#f9fafb', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
+                                        <div style={{ flex: 1 }}>
+                                            <label className="form-label" style={{ fontSize: '12px' }}>Dia da Semana</label>
+                                            <select value={d.diaSemana} onChange={(e) => handleDiaLetivoChange(index, 'diaSemana', parseInt(e.target.value))} className="form-select" style={{ fontSize: '13px', padding: '6px 10px' }}>
+                                                <option value={1}>Segunda-feira</option>
+                                                <option value={2}>Terça-feira</option>
+                                                <option value={3}>Quarta-feira</option>
+                                                <option value={4}>Quinta-feira</option>
+                                                <option value={5}>Sexta-feira</option>
+                                                <option value={6}>Sábado</option>
+                                                <option value={0}>Domingo</option>
+                                            </select>
+                                        </div>
+                                        <div style={{ width: '120px' }}>
+                                            <label className="form-label" style={{ fontSize: '12px' }}>Início</label>
+                                            <input type="time" value={d.horaInicio.substring(0,5)} onChange={(e) => handleDiaLetivoChange(index, 'horaInicio', e.target.value + ':00')} className="form-input" style={{ fontSize: '13px', padding: '6px 10px' }} />
+                                        </div>
+                                        <div style={{ width: '120px' }}>
+                                            <label className="form-label" style={{ fontSize: '12px' }}>Término</label>
+                                            <input type="time" value={d.horaFim.substring(0,5)} onChange={(e) => handleDiaLetivoChange(index, 'horaFim', e.target.value + ':00')} className="form-input" style={{ fontSize: '13px', padding: '6px 10px' }} />
+                                        </div>
+                                        <button onClick={() => handleRemoveDiaLetivo(index)} style={{ marginTop: '18px', border: 'none', background: 'transparent', color: '#ef4444', cursor: 'pointer', padding: '4px' }} title="Remover">
+                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+                                        </button>
+                                    </div>
+                                ))}
+                                {diasLetivos.length === 0 && (
+                                    <div style={{ padding: '24px 0', textAlign: 'center', color: '#9ca3af', fontSize: '14px', border: '1px dashed #d1d5db', borderRadius: '8px' }}>
+                                        Nenhum dia letivo configurado. Clique em "Adicionar Dia".
+                                    </div>
+                                )}
+                            </div>
+                            
+                            <button onClick={handleAddDiaLetivo} style={{ padding: '8px 14px', background: 'white', border: '1.5px dashed #3b82f6', color: '#3b82f6', borderRadius: '8px', cursor: 'pointer', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                                Adicionar Dia
+                            </button>
                         </div>
                     )}
                 </div>

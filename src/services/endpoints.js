@@ -14,6 +14,8 @@ export const pessoaService = {
     criar: (data) => api.post('/pessoas', data),
     atualizar: (id, data) => api.put(`/pessoas/${id}`, data),
     desativar: (id) => api.delete(`/pessoas/${id}`),
+    getDisponibilidade: (id) => api.get(`/pessoas/${id}/disponibilidade`),
+    definirDisponibilidade: (id, data) => api.put(`/pessoas/${id}/disponibilidade`, data),
 };
 
 // ==================== CURSOS ====================
@@ -26,6 +28,7 @@ export const cursoService = {
     vincularDisciplina: (cursoId, disciplinaId, semestre) => api.post(`/cursos/${cursoId}/disciplinas/${disciplinaId}`, null, { params: semestre ? { semestre } : {} }),
     desvincularDisciplina: (cursoId, disciplinaId) => api.delete(`/cursos/${cursoId}/disciplinas/${disciplinaId}`),
     getDisciplinas: (cursoId) => api.get(`/cursos/${cursoId}/disciplinas`),
+    reordenarDisciplinas: (cursoId, disciplinasIds) => api.put(`/cursos/${cursoId}/disciplinas/reordenar`, disciplinasIds),
 };
 
 // ==================== DISCIPLINAS ====================
@@ -49,6 +52,9 @@ export const turmaService = {
     cancelarMatricula: (turmaId, alunoId) => api.delete(`/turmas/${turmaId}/matriculas/${alunoId}`),
     getDisciplinas: (turmaId) => api.get(`/turmas/${turmaId}/disciplinas`),
     atribuirDocente: (turmaId, disciplinaId, docenteId) => api.put(`/turmas/${turmaId}/disciplinas/${disciplinaId}/docente`, { docenteId }),
+    getDiasLetivos: (id) => api.get(`/turmas/${id}/dias-letivos`),
+    definirDiasLetivos: (id, data) => api.put(`/turmas/${id}/dias-letivos`, data),
+    definirHorarios: (turmaId, disciplinaId, horarios) => api.put(`/turmas/${turmaId}/disciplinas/${disciplinaId}/horarios`, horarios),
 };
 
 // ==================== DIÁRIO DE CLASSE ====================
@@ -89,17 +95,20 @@ export const financeiroService = {
 
 // ==================== DOCUMENTOS ====================
 export const documentoService = {
-    emitir: (data) => api.post('/documentos/emitir', data, { responseType: 'blob' }),
+    emitir: (data) => api.post('/documentos/emitir', data),
+    status: (jobId) => api.get(`/documentos/status/${jobId}`),
+    download: (jobId) => api.get(`/documentos/download/${jobId}`, { responseType: 'blob' }),
 };
 
 // ==================== CRONOGRAMA ====================
 export const cronogramaService = {
-    getByData: (data) => api.get('/cronograma', { params: { data } }),
+    getByData: (data) => api.get(`/cronograma/data/${data}`),
     getByDocente: (docenteId, inicio, fim) => api.get(`/cronograma/docente/${docenteId}`, { params: { inicio, fim } }),
     criar: (data) => api.post('/cronograma', data),
     atualizar: (id, data) => api.put(`/cronograma/${id}`, data),
     deletar: (id) => api.delete(`/cronograma/${id}`),
-    verificarConflitos: (data) => api.post('/cronograma/verificar-conflitos', data),
+    verificarConflitos: (data) => api.post('/cronograma/conflitos', data),
+    gerarLote: (data) => api.post('/cronograma/gerar-lote', data),
 };
 
 // ==================== CONFIGURAÇÕES ====================
@@ -113,4 +122,12 @@ export const templateService = {
     get: (tipo) => api.get(`/templates/${tipo}`),
     upload: (data) => api.post('/templates/upload', data, { headers: { 'Content-Type': 'multipart/form-data' } }),
     saveTags: (data) => api.post('/templates/tags', data)
+};
+
+// ==================== USUÁRIOS ====================
+export const usuarioService = {
+    getAll: () => api.get('/usuarios'),
+    alterarPerfil: (id, perfil) => api.put(`/usuarios/${id}/perfil`, { perfil }),
+    alternarStatus: (id) => api.put(`/usuarios/${id}/status`),
+    resetarSenha: (id, novaSenha) => api.post(`/usuarios/${id}/reset-senha`, { novaSenha })
 };

@@ -1,8 +1,9 @@
-import { useAuth } from '../../contexts/AuthContext';
+import useAuthStore from '../../store/useAuthStore';
 import { useNavigate } from 'react-router-dom';
 
 export default function Header() {
-    const { user, logout } = useAuth();
+    const user = useAuthStore(state => state.user);
+    const logout = useAuthStore(state => state.logout);
     const navigate = useNavigate();
     const handleLogout = () => { logout(); navigate('/login'); };
     const initials = user?.nome?.charAt(0)?.toUpperCase() || 'U';
